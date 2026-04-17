@@ -17,7 +17,7 @@ import {
 
 const EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-const SUBMIT_TIMEOUT_MS = 20_000;
+const SUBMIT_TIMEOUT_MS = 120_000;
 
 export default function TranscriptionPage() {
   const { user } = useAuth();
@@ -70,7 +70,7 @@ export default function TranscriptionPage() {
   };
 
   const pollEdgeStatus = async (jobId: string): Promise<string> => {
-    const maxWait = 300_000;
+    const maxWait = 900_000;
     const pollInterval = 3_000;
     const started = Date.now();
 
@@ -96,7 +96,7 @@ export default function TranscriptionPage() {
       }
     }
 
-    throw new Error("Transcription timed out after 5 minutes");
+    throw new Error("Transcription timed out after 15 minutes");
   };
 
   const saveResult = async (
