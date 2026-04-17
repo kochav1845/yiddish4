@@ -20,29 +20,16 @@ RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
 
 WORKDIR /app
 
-COPY runpod/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cu121 \
     -r requirements.txt
 
+COPY download_model.py .
 ARG HF_TOKEN
-RUN python <<'PYEOF'
-import os
-from huggingface_hub import login
-token = os.environ.get('HF_TOKEN', '')
-if token:
-    login(token=token)
-from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
-import torch
+RUN python download_model.py
 
-model_id = 'ivrit-ai/yi-whisper-large-v3'
-print(f'Downloading {model_id}...')
-AutoModelForSpeechSeq2Seq.from_pretrained(model_id, torch_dtype=torch.float16, low_cpu_mem_usage=True, use_safetensors=True)
-AutoProcessor.from_pretrained(model_id)
-print(f'{model_id} downloaded successfully')
-PYEOF
-
-COPY runpod/server.py .
+COPY server.py .
 
 EXPOSE 8080
 
