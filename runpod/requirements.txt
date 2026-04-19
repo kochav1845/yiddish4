@@ -1,7 +1,5 @@
 runpod
 transformers==4.51.3
-torch==2.7.0+cu128
-torchaudio==2.7.0+cu128
 accelerate==1.6.0
 safetensors==0.5.3
 librosa==0.10.2
