@@ -1,9 +1,9 @@
 runpod
-transformers==4.47.1
-torch==2.5.1+cu121
-torchaudio==2.5.1+cu121
-accelerate==1.2.1
-safetensors==0.4.5
+transformers==4.51.3
+torch==2.7.0+cu128
+torchaudio==2.7.0+cu128
+accelerate==1.6.0
+safetensors==0.5.3
 librosa==0.10.2
 soundfile==0.12.1
 ffmpeg-python==0.2.0

@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.1-cudnn9-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -22,7 +22,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cu121 \
+    --extra-index-url https://download.pytorch.org/whl/cu128 \
     -r requirements.txt
 
 COPY download_model.py .
