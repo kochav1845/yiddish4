@@ -14,14 +14,14 @@ RUN git lfs install
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY runpod/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY download_model.py .
+COPY runpod/download_model.py .
 ARG HF_TOKEN
 RUN python download_model.py
 
-COPY server.py .
+COPY runpod/server.py .
 
 EXPOSE 8080
 
