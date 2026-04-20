@@ -36,11 +36,11 @@ export default function DatasetItemRow({ item, audioUrl, onDelete }: DatasetItem
     new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
-    <div className="flex items-start gap-4 p-4 rounded-xl hover:bg-stone-50 transition-colors duration-100 group">
+    <div className="flex items-start gap-2 sm:gap-4 p-3 sm:p-4 rounded-xl hover:bg-stone-50 transition-colors duration-100 group">
       <button
         onClick={togglePlay}
         disabled={!audioUrl}
-        className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${
+        className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-150 ${
           audioUrl
             ? playing
               ? "bg-amber-100 text-amber-600"
@@ -76,7 +76,7 @@ export default function DatasetItemRow({ item, audioUrl, onDelete }: DatasetItem
 
       <button
         onClick={() => onDelete(item.id, item.storage_path)}
-        className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-stone-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-150"
+        className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-stone-300 hover:text-red-500 hover:bg-red-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-150"
         title="Delete"
       >
         <Trash2 size={14} />

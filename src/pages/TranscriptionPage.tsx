@@ -230,17 +230,17 @@ export default function TranscriptionPage() {
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100/50">
       <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-6 py-10">
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-8 mb-8">
+      <main className="max-w-3xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-4 sm:p-6 md:p-8 mb-6 sm:mb-8">
           <EditableText
             contentKey="main_heading"
             defaultValue="טראַנסקריבירט אַודיאָ"
             as="h2"
-            className="text-2xl font-bold text-stone-900 mb-1 font-hebrew"
+            className="text-xl sm:text-2xl font-bold text-stone-900 mb-1 font-hebrew"
             dir="rtl"
           />
           <p
-            className="text-stone-500 text-[2rem] leading-[1.5] mb-6 font-display"
+            className="text-stone-500 text-base sm:text-[1.5rem] md:text-[2rem] leading-[1.5] mb-5 sm:mb-6 font-display"
             dir="rtl"
           >
             קלייבט אויס די שפראך פון{" "}
@@ -292,7 +292,7 @@ export default function TranscriptionPage() {
         <TranscriptionHistory items={history} onDelete={handleDelete} />
       </main>
 
-      <footer className="text-center text-stone-400 text-xs py-8 font-hebrew">
+      <footer className="text-center text-stone-400 text-xs py-6 sm:py-8 font-hebrew">
         yi-whisper &middot; Gemini &middot; Claude
       </footer>
     </div>

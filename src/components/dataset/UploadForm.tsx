@@ -72,7 +72,7 @@ export default function UploadForm({ onUpload, isUploading }: UploadFormProps) {
               <FileAudio size={20} className="text-green-600" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold text-stone-800 truncate max-w-[280px]">{file.name}</p>
+              <p className="text-sm font-semibold text-stone-800 truncate max-w-[160px] sm:max-w-[280px]">{file.name}</p>
               <p className="text-xs text-stone-400">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
             </div>
           </div>

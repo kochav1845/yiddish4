@@ -104,9 +104,9 @@ export default function DatasetPage() {
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100/50">
       <AppHeader />
 
-      <main className="max-w-5xl mx-auto px-6 py-10 space-y-8">
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-8">
-          <div className="flex items-center gap-3 mb-6">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-6 sm:py-10 space-y-5 sm:space-y-8">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-4 sm:p-6 md:p-8">
+          <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-sm">
               <Database size={18} className="text-white" />
             </div>
@@ -132,7 +132,7 @@ export default function DatasetPage() {
         )}
 
         <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 overflow-hidden">
-          <div className="px-6 py-5 border-b border-stone-100 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-stone-100 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-stone-800">Dataset Items</h3>
               <p className="text-xs text-stone-400 mt-0.5">

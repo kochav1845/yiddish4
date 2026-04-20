@@ -31,8 +31,8 @@ export default function LanguageSelector({
   disabled = false,
 }: LanguageSelectorProps) {
   return (
-    <div className="flex items-center gap-3 flex-wrap" dir="rtl">
-      <div className="flex-1 min-w-[140px]">
+    <div className="flex items-center gap-2 sm:gap-3 flex-wrap" dir="rtl">
+      <div className="flex-1 min-w-[110px] sm:min-w-[140px]">
         <EditableText
           contentKey="input_lang_label"
           defaultValue="שפּראַך פֿון אַודיאָ"
@@ -63,7 +63,7 @@ export default function LanguageSelector({
         </div>
       </div>
 
-      <div className="flex-1 min-w-[140px]">
+      <div className="flex-1 min-w-[110px] sm:min-w-[140px]">
         <EditableText
           contentKey="output_lang_label"
           defaultValue="שפּראַך פֿון רעזולטאַט"

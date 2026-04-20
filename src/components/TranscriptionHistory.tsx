@@ -71,14 +71,14 @@ export default function TranscriptionHistory({
           contentKey="history_empty_title"
           defaultValue="נאָך נישטאָ קיין אויפֿנאַמעס"
           as="p"
-          className="text-stone-400 font-medium font-display text-[2rem]"
+          className="text-stone-400 font-medium font-display text-lg sm:text-[2rem]"
           dir="rtl"
         />
         <EditableText
           contentKey="history_empty_subtitle"
           defaultValue="אייערע טראַנסקריפּציעס וועלן דאָ אויפֿטרעטן"
           as="p"
-          className="text-stone-300 text-[1.5rem] mt-1 font-display"
+          className="text-stone-300 text-base sm:text-[1.5rem] mt-1 font-display"
           dir="rtl"
         />
       </div>
@@ -126,7 +126,7 @@ export default function TranscriptionHistory({
                 onClick={() =>
                   setExpanded(expanded === item.id ? null : item.id)
                 }
-                className="w-full flex items-center justify-between px-5 py-4 hover:bg-stone-50/60 transition-colors duration-150 text-right"
+                className="w-full flex items-center justify-between px-3 sm:px-5 py-3 sm:py-4 hover:bg-stone-50/60 transition-colors duration-150 text-right"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
@@ -221,7 +221,7 @@ export default function TranscriptionHistory({
                         ? "he"
                         : "en"
                     }
-                    className={`px-5 pb-5 pt-2 text-stone-700 ${fontClass}`}
+                    className={`px-3 sm:px-5 pb-4 sm:pb-5 pt-2 text-stone-700 ${fontClass}`}
                   >
                     {stripDiacritics(item.transcription ?? "")}
                   </div>

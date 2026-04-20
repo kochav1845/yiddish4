@@ -108,7 +108,7 @@ export default function AudioInput({ onTranscribe, isLoading, statusMsg }: Audio
           !isLoading && !isRecording && fileInputRef.current?.click()
         }
         className={`
-          relative border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-200 cursor-pointer group
+          relative border-2 border-dashed rounded-2xl p-5 sm:p-8 md:p-10 text-center transition-all duration-200 cursor-pointer group
           ${
             isDragging
               ? "border-amber-500 bg-amber-50/80"
@@ -160,7 +160,7 @@ export default function AudioInput({ onTranscribe, isLoading, statusMsg }: Audio
           <button
             onClick={startRecording}
             disabled={isLoading}
-            className="flex items-center gap-2.5 px-7 py-3.5 bg-gradient-to-l from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-all duration-200 shadow-md shadow-amber-200/40 hover:shadow-lg hover:shadow-amber-200/50"
+            className="flex items-center gap-2 sm:gap-2.5 px-5 sm:px-7 py-3 sm:py-3.5 bg-gradient-to-l from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-all duration-200 shadow-md shadow-amber-200/40 hover:shadow-lg hover:shadow-amber-200/50 text-sm sm:text-base"
           >
             <Mic size={18} />
             <EditableText
@@ -177,7 +177,7 @@ export default function AudioInput({ onTranscribe, isLoading, statusMsg }: Audio
               <div className="absolute inset-0 rounded-full bg-red-400 animate-pulse-ring" />
               <button
                 onClick={stopRecording}
-                className="relative flex items-center gap-2.5 px-7 py-3.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors duration-150 shadow-md"
+                className="relative flex items-center gap-2 sm:gap-2.5 px-5 sm:px-7 py-3 sm:py-3.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors duration-150 shadow-md text-sm sm:text-base"
               >
                 <Square size={16} />
                 <span className="font-hebrew">{formatTime(recordingTime)}</span>

@@ -47,7 +47,7 @@ export default function ExportPanel({ items }: ExportPanelProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-6">
+    <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-stone-800">Export Dataset</h3>

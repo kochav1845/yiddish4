@@ -93,7 +93,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
             <Mic2 size={28} className="text-white" strokeWidth={1.8} />
           </div>
           <h1
-            className="text-3xl font-bold text-stone-900 mb-1 font-hebrew"
+            className="text-xl sm:text-2xl md:text-3xl font-bold text-stone-900 mb-1 font-hebrew"
             dir="rtl"
           >
             יידיש טרענסילעישן - איבערטייטשער
@@ -103,7 +103,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
           </p>
         </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-xl shadow-stone-200/20 p-8">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-xl shadow-stone-200/20 p-5 sm:p-8">
           <div className="flex bg-stone-100 rounded-xl p-1 mb-7">
             <button
               onClick={() => {

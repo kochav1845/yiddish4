@@ -36,21 +36,21 @@ export default function TranscriptionResult({
 
   return (
     <div className="bg-white border border-stone-200 rounded-2xl shadow-sm overflow-hidden animate-slide-up">
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-stone-100 bg-stone-50/60">
+      <div className="flex items-start sm:items-center justify-between px-3 sm:px-5 py-3 sm:py-3.5 border-b border-stone-100 bg-stone-50/60 gap-2 flex-wrap sm:flex-nowrap">
         <div
-          className="flex items-center gap-2 text-stone-600 text-sm font-medium truncate font-hebrew"
+          className="flex items-center gap-2 text-stone-600 text-xs sm:text-sm font-medium min-w-0 font-hebrew"
           dir="ltr"
         >
-          <FileAudio size={15} className="text-amber-600 shrink-0" />
-          <span className="truncate">{filename}</span>
+          <FileAudio size={14} className="text-amber-600 shrink-0" />
+          <span className="truncate max-w-[140px] sm:max-w-none">{filename}</span>
         </div>
-        <div className="flex items-center gap-2 shrink-0 mr-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 sm:mr-2">
           {isYiddish && (
             <button
               onClick={() =>
                 setYiddishFont((f) => (f === "tree" ? "reponzel" : "tree"))
               }
-              className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-200 hover:bg-stone-200 text-stone-600 font-hebrew"
+              className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-medium px-2 sm:px-3 py-1.5 rounded-lg transition-colors duration-200 hover:bg-stone-200 text-stone-600 font-hebrew"
               title="Switch font"
             >
               <Type size={14} />
@@ -61,7 +61,7 @@ export default function TranscriptionResult({
           )}
           <button
             onClick={handleCopy}
-            className={`flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors duration-200 font-hebrew ${
+            className={`flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-medium px-2 sm:px-3 py-1.5 rounded-lg transition-colors duration-200 font-hebrew ${
               copied
                 ? "bg-emerald-100 text-emerald-700"
                 : "hover:bg-amber-100 text-amber-700"
@@ -75,7 +75,7 @@ export default function TranscriptionResult({
       <div
         dir={isRtl ? "rtl" : "ltr"}
         lang={language === "yiddish" ? "yi" : language === "hebrew" ? "he" : "en"}
-        className={`p-6 text-stone-800 whitespace-pre-wrap ${fontClass}`}
+        className={`p-4 sm:p-6 text-stone-800 whitespace-pre-wrap ${fontClass}`}
       >
         {text ? stripDiacritics(text) : (
           <span className="text-stone-400 italic font-hebrew text-base">
