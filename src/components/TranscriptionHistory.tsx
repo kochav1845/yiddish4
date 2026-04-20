@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Transcription } from "../lib/supabase";
 import EditableText from "./EditableText";
+import { stripDiacritics } from "../lib/textUtils";
 
 interface TranscriptionHistoryProps {
   items: Transcription[];
@@ -133,7 +134,7 @@ export default function TranscriptionHistory({
                   </div>
                   <div className="min-w-0">
                     <p className="text-stone-800 font-medium text-sm truncate font-hebrew">
-                      {item.filename || "אָן נאָמען"}
+                      {item.filename || "אן נאמען"}
                     </p>
                     <p
                       className="text-stone-400 text-[1.1rem] mt-0.5 flex items-center gap-1.5 flex-wrap font-hebrew"
@@ -206,7 +207,7 @@ export default function TranscriptionHistory({
                       >
                         <Type size={12} />
                         <span>
-                          {currentFont === "tree" ? "עץ הדעת" : "רעפּאָנצל"}
+                          {currentFont === "tree" ? "עץ הדעת" : "רעפנצל"}
                         </span>
                       </button>
                     </div>
@@ -222,7 +223,7 @@ export default function TranscriptionHistory({
                     }
                     className={`px-5 pb-5 pt-2 text-stone-700 ${fontClass}`}
                   >
-                    {item.transcription}
+                    {stripDiacritics(item.transcription ?? "")}
                   </div>
                 </div>
               )}

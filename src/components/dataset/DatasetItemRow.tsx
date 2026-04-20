@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Trash2, Play, Pause, FileAudio } from "lucide-react";
 import type { DatasetItem } from "../../lib/supabase";
+import { stripDiacritics } from "../../lib/textUtils";
 
 interface DatasetItemRowProps {
   item: DatasetItem;
@@ -68,7 +69,7 @@ export default function DatasetItemRow({ item, audioUrl, onDelete }: DatasetItem
           className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2"
           dir="auto"
         >
-          {item.transcription}
+          {stripDiacritics(item.transcription ?? "")}
         </p>
         <p className="text-xs text-stone-400 mt-1">{fmtDate(item.created_at)}</p>
       </div>

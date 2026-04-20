@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Copy, Check, FileAudio, Type } from "lucide-react";
+import { stripDiacritics } from "../lib/textUtils";
 
 interface TranscriptionResultProps {
   text: string;
@@ -22,7 +23,7 @@ export default function TranscriptionResult({
   const isYiddish = language === "yiddish";
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(stripDiacritics(text));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -54,7 +55,7 @@ export default function TranscriptionResult({
             >
               <Type size={14} />
               <span className="text-xs">
-                {yiddishFont === "tree" ? "עץ הדעת" : "רעפּאָנצל"}
+                {yiddishFont === "tree" ? "עץ הדעת" : "רעפנצל"}
               </span>
             </button>
           )}
@@ -76,7 +77,7 @@ export default function TranscriptionResult({
         lang={language === "yiddish" ? "yi" : language === "hebrew" ? "he" : "en"}
         className={`p-6 text-stone-800 whitespace-pre-wrap ${fontClass}`}
       >
-        {text || (
+        {text ? stripDiacritics(text) : (
           <span className="text-stone-400 italic font-hebrew text-base">
             No transcription returned.
           </span>

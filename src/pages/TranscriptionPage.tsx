@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { stripDiacritics } from "../lib/textUtils";
 import AudioInput from "../components/AudioInput";
 import TranscriptionResult from "../components/TranscriptionResult";
 import TranscriptionHistory from "../components/TranscriptionHistory";
@@ -242,9 +243,9 @@ export default function TranscriptionPage() {
             className="text-stone-500 text-[2rem] leading-[1.5] mb-6 font-display"
             dir="rtl"
           >
-            קלייבט אויס די שפּראַך פֿון{" "}
+            קלייבט אויס די שפראך פון{" "}
             <span className="font-hebrew">audio</span>{" "}
-            און די שפּראַך פֿון{" "}
+            און די שפראך פון{" "}
             <span className="font-hebrew">result</span>{" "}
             וואס איר ווילט, דאן קענט איר אפלאודן אדער נעמט אויף.
           </p>
@@ -267,7 +268,7 @@ export default function TranscriptionPage() {
             className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-5 py-4 mb-6 text-sm font-medium animate-fade-in font-hebrew"
             dir="rtl"
           >
-            {error}
+            {stripDiacritics(error)}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { Mic2, Loader2, Mail, Lock, UserPlus, LogIn, ArrowLeft } from "lucide-react";
+import { stripDiacritics } from "../lib/textUtils";
 
 interface LoginPageProps {
   onBack?: () => void;
@@ -32,7 +33,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
     }
 
     if (password.length < 6) {
-      setError("פּאַסוואָרט מוז האָבן מינדסטנס 6 אותיות");
+      setError("פאסוארט מוז האָבן מינדסטנס 6 אותיות");
       return;
     }
 
@@ -44,7 +45,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
           setError(translateError(err));
         } else {
           setSuccess(
-            "!באַניצער איז באַשאַפֿן געוואָרן. איר קענט זיך אַריינלאָגן"
+            "!באַניצער איז באַשאַפֿן געוואָרן. איר קענט זיך אריינלאגן"
           );
           setIsRegister(false);
           setPassword("");
@@ -63,7 +64,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
 
   const translateError = (err: string) => {
     if (err.includes("Invalid login"))
-      return "פֿאַלשע אימעיל אָדער פּאַסוואָרט";
+      return "פֿאַלשע אימעיל אָדער פאסוארט";
     if (err.includes("already registered"))
       return "די אימעיל איז שוין רעגיסטרירט";
     if (err.includes("invalid email")) return "אומגילטיקע אימעיל אַדרעס";
@@ -98,7 +99,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
             יידיש טרענסילעישן - איבערטייטשער
           </h1>
           <p className="text-stone-500 text-sm font-hebrew" dir="rtl">
-            שפּראַך-צו-טעקסט מיט קינסטלעכע אינטעליגענץ
+            שפראך-צו-טעקסט מיט קינסטלעכע אינטעליגענץ
           </p>
         </div>
 
@@ -118,7 +119,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
               dir="rtl"
             >
               <LogIn size={15} />
-              <span className="font-hebrew">אַריינלאָגן</span>
+              <span className="font-hebrew">אריינלאגן</span>
             </button>
             <button
               onClick={() => {
@@ -143,7 +144,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
               className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5 text-sm font-medium font-hebrew"
               dir="rtl"
             >
-              {error}
+              {stripDiacritics(error)}
             </div>
           )}
 
@@ -152,7 +153,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
               className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 mb-5 text-sm font-medium font-hebrew"
               dir="rtl"
             >
-              {success}
+              {stripDiacritics(success)}
             </div>
           )}
 
@@ -185,7 +186,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
                 className="block text-sm font-medium text-stone-700 mb-1.5 font-hebrew"
                 dir="rtl"
               >
-                פּאַסוואָרט
+                פאסוארט
               </label>
               <div className="relative">
                 <Lock
@@ -209,7 +210,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
                   className="block text-sm font-medium text-stone-700 mb-1.5 font-hebrew"
                   dir="rtl"
                 >
-                  באַשטעטיקט פּאַסוואָרט
+                  באשטעטיקט פאסוארט
                 </label>
                 <div className="relative">
                   <Lock
@@ -244,7 +245,7 @@ export default function LoginPage({ onBack }: LoginPageProps) {
               ) : (
                 <>
                   <LogIn size={16} />
-                  <span className="font-hebrew">אַריינלאָגן</span>
+                  <span className="font-hebrew">אריינלאגן</span>
                 </>
               )}
             </button>

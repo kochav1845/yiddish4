@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Upload, Mic, Square, Loader2, AlertCircle } from "lucide-react";
 import EditableText from "./EditableText";
+import { stripDiacritics } from "../lib/textUtils";
 
 interface AudioInputProps {
   onTranscribe: (file: File) => void;
@@ -195,7 +196,7 @@ export default function AudioInput({ onTranscribe, isLoading, statusMsg }: Audio
           <div className="flex items-center gap-2 text-amber-700 font-medium">
             <Loader2 size={20} className="animate-spin" />
             <span className="font-hebrew" dir="rtl">
-              {statusMsg || "טראַנסקריבירט..."}
+              {stripDiacritics(statusMsg || "טראַנסקריבירט...")}
             </span>
           </div>
         )}
@@ -204,7 +205,7 @@ export default function AudioInput({ onTranscribe, isLoading, statusMsg }: Audio
       {error && (
         <div className="flex items-center gap-2 text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm font-hebrew">
           <AlertCircle size={16} className="shrink-0" />
-          {error}
+          {stripDiacritics(error)}
         </div>
       )}
     </div>

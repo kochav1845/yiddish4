@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Pencil, Check, X } from "lucide-react";
 import { useSiteContent } from "../contexts/SiteContentContext";
+import { stripDiacritics } from "../lib/textUtils";
 
 interface EditableTextProps {
   contentKey: string;
@@ -24,7 +25,7 @@ export default function EditableText({
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
-  const displayValue = content[contentKey] ?? defaultValue;
+  const displayValue = stripDiacritics(content[contentKey] ?? defaultValue);
 
   useEffect(() => {
     if (editing && inputRef.current) {
