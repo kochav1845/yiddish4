@@ -132,7 +132,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         <div className="relative max-w-7xl mx-auto px-6 py-32 grid lg:grid-cols-2 gap-12 items-center">
           <div className="animate-slide-up">
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 mb-8">
-              <Zap size={14} className="text-amber-400" />
+              <Mic2 size={14} className="text-amber-400" />
               <span className="text-white/80 text-sm">AI-Powered Transcription</span>
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
