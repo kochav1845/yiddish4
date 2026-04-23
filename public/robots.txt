@@ -1,23 +1,55 @@
+# robots.txt — Yiddish Labs (https://yiddishlabs.com/)
+# Last updated: 2026-04-23
+
+# ===== Standard Search Crawlers =====
 User-agent: *
 Allow: /
-
-# Sitemaps
-Sitemap: https://yiddishlabs.com/sitemap.xml
-
-# Disallow private/API paths
 Disallow: /functions/
 Disallow: /rest/
-Disallow: /auth/
+Disallow: /auth/v1/
 
-# Allow all major crawlers
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 2
 
 User-agent: DuckDuckBot
 Allow: /
 
 User-agent: YandexBot
 Allow: /
+
+# ===== AI Overview / Generative Search Crawlers (2026 GEO) =====
+# Allow all AI crawlers for AI Overview and generative search citation
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+# ===== Sitemaps =====
+Sitemap: https://yiddishlabs.com/sitemap.xml

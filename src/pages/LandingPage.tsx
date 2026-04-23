@@ -335,6 +335,26 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         <div className="absolute bottom-0 left-0 right-0 h-16 sm:h-24 bg-gradient-to-t from-white to-transparent" />
       </section>
 
+      {/* ===== STATS TRUST BAR ===== */}
+      <section className="bg-stone-900 py-8 sm:py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8">
+            {[
+              { value: "3", label: "Yiddish Dialects", sub: "Ashkenazi · Litvish · Galician" },
+              { value: "8+", label: "Audio Formats", sub: "WAV · MP3 · M4A · FLAC · more" },
+              { value: "100%", label: "Free to Use", sub: "No credit card required" },
+              { value: "AI", label: "Fine-Tuned Model", sub: "Whisper — Yiddish-specific" },
+            ].map(({ value, label, sub }) => (
+              <div key={label} className="text-center">
+                <p className="text-2xl sm:text-3xl font-bold text-amber-400 mb-1">{value}</p>
+                <p className="text-white font-semibold text-xs sm:text-sm">{label}</p>
+                <p className="text-white/40 text-[10px] sm:text-xs mt-0.5">{sub}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ===== FEATURES ===== */}
       <section id="features" className="py-16 sm:py-20 lg:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -430,6 +450,71 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 <p className="text-stone-500 text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== ABOUT YIDDISH — TOPICAL AUTHORITY CONTENT ===== */}
+      <section className="py-16 sm:py-20 lg:py-24 bg-stone-50" itemScope itemType="https://schema.org/Article">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="grid md:grid-cols-2 gap-10 lg:gap-16 items-start">
+            <div>
+              <p className="text-amber-600 text-xs font-bold uppercase tracking-widest mb-3">About the Language</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-5">
+                What is Yiddish?
+              </h2>
+              <div className="space-y-4 text-stone-600 text-sm sm:text-base leading-relaxed" itemProp="description">
+                <p>
+                  Yiddish (<span lang="yi" dir="rtl">ייִדיש</span>) is a Germanic language spoken by Ashkenazi Jewish communities
+                  for over a thousand years. It developed in the Rhineland region of Germany and spread
+                  throughout Central and Eastern Europe, blending German, Hebrew, Aramaic, and Slavic
+                  linguistic elements into a rich and expressive language.
+                </p>
+                <p>
+                  Before World War II, Yiddish was spoken by an estimated 11 to 13 million people worldwide.
+                  Today, the language is experiencing a revival — spoken by Hasidic communities, taught in
+                  universities, and preserved through organizations like the
+                  {" "}<strong>YIVO Institute for Jewish Research</strong> in New York.
+                </p>
+                <p>
+                  Yiddish is written in <strong>Hebrew script</strong>, read right-to-left. The three main
+                  dialect groups — <strong>Ashkenazi</strong> (Central), <strong>Litvish</strong> (Northeastern),
+                  and <strong>Galician</strong> (Southeastern) — differ in pronunciation and vocabulary,
+                  making dialect-aware transcription and translation tools essential.
+                </p>
+              </div>
+            </div>
+            <div>
+              <p className="text-amber-600 text-xs font-bold uppercase tracking-widest mb-3">About the Technology</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-5">
+                How the AI Works
+              </h2>
+              <div className="space-y-4 text-stone-600 text-sm sm:text-base leading-relaxed">
+                <p>
+                  Yiddish Labs is powered by a <strong>fine-tuned Whisper AI model</strong> trained
+                  specifically on Yiddish speech data. Unlike generic multilingual models that treat
+                  Yiddish as a low-resource afterthought, our model is purpose-built for Yiddish
+                  phonology, script, and dialect variation.
+                </p>
+                <p>
+                  For <strong>Yiddish translation</strong>, the AI processes both the acoustic speech signal
+                  and the semantic content of the transcribed Yiddish text to produce fluent, natural
+                  English or Hebrew output — not a word-for-word gloss.
+                </p>
+                <p>
+                  The <strong>Yiddish transcription</strong> output follows standard YIVO orthography
+                  conventions, making it usable for academic research, publication, and archival work.
+                  All processing happens server-side with privacy-safe handling of your audio data.
+                </p>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {["Whisper AI", "YIVO Orthography", "Ashkenazi", "Litvish", "Galician", "Hebrew Script"].map((tag) => (
+                  <span key={tag} className="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
