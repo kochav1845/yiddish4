@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://yiddishlabs.com/sitemap.xml
+
+# Disallow private/API paths
+Disallow: /functions/
+Disallow: /rest/
+Disallow: /auth/
+
+# Allow all major crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: YandexBot
+Allow: /
