@@ -75,7 +75,9 @@ def handler(job):
     except Exception:
         return {"error": "Invalid base64 audio data"}
 
-    ext = os.path.splitext(filename)[1].lower() or ".wav"
+    # Always use the original extension so ffmpeg can detect the input format.
+    # Fall back to .bin if no extension so we can still attempt conversion.
+    ext = os.path.splitext(filename)[1].lower() or ".bin"
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         tmp.write(audio_bytes)
@@ -83,16 +85,31 @@ def handler(job):
 
     wav_path = None
     try:
-        input_path = tmp_path
-        if ext in (".webm", ".ogg", ".m4a", ".mp4"):
-            wav_path = tmp_path.rsplit(".", 1)[0] + ".wav"
+        # soundfile only reliably handles WAV and FLAC.
+        # Run ffmpeg for every other format (including mp3, webm, ogg, m4a, mp4, etc.)
+        # to produce a 16 kHz mono WAV that Whisper can consume directly.
+        NATIVE_FORMATS = {".wav", ".flac"}
+        if ext not in NATIVE_FORMATS:
+            wav_path = tmp_path.rsplit(".", 1)[0] + "_converted.wav"
             proc = subprocess.run(
-                ["ffmpeg", "-y", "-i", tmp_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path],
+                [
+                    "ffmpeg", "-y",
+                    "-i", tmp_path,
+                    "-ar", "16000",
+                    "-ac", "1",
+                    "-f", "wav",
+                    wav_path,
+                ],
                 capture_output=True,
                 timeout=120,
             )
-            if proc.returncode == 0:
-                input_path = wav_path
+            if proc.returncode != 0:
+                stderr_msg = proc.stderr.decode(errors="replace")[:400]
+                print(f"[FFMPEG] Conversion failed (exit {proc.returncode}): {stderr_msg}")
+                return {"error": f"Audio conversion failed. The file may be corrupted or in an unsupported format. Details: {stderr_msg}"}
+            input_path = wav_path
+        else:
+            input_path = tmp_path
 
         result = pipe(
             input_path,
@@ -110,7 +127,8 @@ def handler(job):
         traceback.print_exc()
         return {"error": str(e)}
     finally:
-        os.unlink(tmp_path)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
         if wav_path and os.path.exists(wav_path):
             os.unlink(wav_path)
 

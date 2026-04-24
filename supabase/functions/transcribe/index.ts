@@ -48,6 +48,24 @@ async function handleSubmit(req: Request): Promise<Response> {
     const buf = await audioFile.arrayBuffer();
     const b64 = toBase64(new Uint8Array(buf));
 
+    // Derive a filename with a reliable extension.
+    // If the original name has no extension, fall back to a MIME-based guess
+    // so the RunPod server can pick the right ffmpeg conversion path.
+    const MIME_TO_EXT: Record<string, string> = {
+      "audio/webm":       "audio.webm",
+      "audio/ogg":        "audio.ogg",
+      "audio/mpeg":       "audio.mp3",
+      "audio/mp4":        "audio.m4a",
+      "audio/x-m4a":     "audio.m4a",
+      "audio/wav":        "audio.wav",
+      "audio/flac":       "audio.flac",
+      "audio/x-flac":     "audio.flac",
+    };
+    const hasExt = /\.\w{2,5}$/.test(audioFile.name);
+    const safeFilename = hasExt
+      ? audioFile.name
+      : (MIME_TO_EXT[audioFile.type] ?? "audio.webm");
+
     const res = await fetch(`${runpodUrl}/run`, {
       method: "POST",
       headers: {
@@ -57,7 +75,7 @@ async function handleSubmit(req: Request): Promise<Response> {
       body: JSON.stringify({
         input: {
           audio: b64,
-          filename: audioFile.name || "audio.wav",
+          filename: safeFilename,
         },
       }),
     });
