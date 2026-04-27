@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Copy, Check, FileAudio, Type } from "lucide-react";
+import { Copy, Check, FileAudio, Type, Database, Pencil } from "lucide-react";
 import { stripDiacritics } from "../lib/textUtils";
 
 interface TranscriptionResultProps {
   text: string;
   filename: string;
   language?: string;
+  onAddToDataset?: () => void;
 }
 
 const RTL_LANGUAGES = new Set(["yiddish", "hebrew"]);
@@ -16,6 +17,7 @@ export default function TranscriptionResult({
   text,
   filename,
   language = "yiddish",
+  onAddToDataset,
 }: TranscriptionResultProps) {
   const [copied, setCopied] = useState(false);
   const [yiddishFont, setYiddishFont] = useState<YiddishFont>("tree");
@@ -44,7 +46,7 @@ export default function TranscriptionResult({
           <FileAudio size={14} className="text-amber-600 shrink-0" />
           <span className="truncate max-w-[140px] sm:max-w-none">{filename}</span>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 sm:mr-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {isYiddish && (
             <button
               onClick={() =>
@@ -70,6 +72,17 @@ export default function TranscriptionResult({
             {copied ? <Check size={14} /> : <Copy size={14} />}
             <span>{copied ? "Copied" : "Copy"}</span>
           </button>
+          {onAddToDataset && (
+            <button
+              onClick={onAddToDataset}
+              className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1.5 rounded-lg transition-colors duration-200 bg-amber-500 hover:bg-amber-600 text-white"
+              title="Edit & add to dataset"
+            >
+              <Pencil size={13} />
+              <span className="hidden sm:inline">Edit &amp; Add to Dataset</span>
+              <span className="sm:hidden">Dataset</span>
+            </button>
+          )}
         </div>
       </div>
       <div
