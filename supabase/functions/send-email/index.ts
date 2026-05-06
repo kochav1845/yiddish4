@@ -16,18 +16,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verify caller is admin via their JWT
     const authHeader = req.headers.get("Authorization") ?? "";
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Extract user from JWT
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
+    console.log("[send-email] auth check:", user?.email, authError?.message);
+
     if (authError || !user || user.email !== ADMIN_EMAIL) {
+      console.log("[send-email] unauthorized:", user?.email);
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -49,7 +50,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Fetch recipient emails from profiles
     let query = supabase.from("profiles").select("id, email");
     if (!sendToAll && userIds && userIds.length > 0) {
       query = query.in("id", userIds);
@@ -62,6 +62,8 @@ Deno.serve(async (req: Request) => {
       .map((p: { id: string; email: string | null }) => p.email)
       .filter((e): e is string => !!e && e.length > 0);
 
+    console.log("[send-email] recipients:", recipients.length);
+
     if (recipients.length === 0) {
       return new Response(
         JSON.stringify({ error: "No valid recipient emails found" }),
@@ -71,13 +73,15 @@ Deno.serve(async (req: Request) => {
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) {
+      console.log("[send-email] RESEND_API_KEY is missing");
       return new Response(
         JSON.stringify({ error: "RESEND_API_KEY is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // Send individually so each recipient is BCC'd (no exposure of other addresses)
+    console.log("[send-email] sending from:", FROM_ADDRESS);
+
     const results: { email: string; ok: boolean; error?: string }[] = [];
 
     for (const email of recipients) {
@@ -95,18 +99,29 @@ Deno.serve(async (req: Request) => {
         }),
       });
       const data = await res.json();
-      results.push({ email, ok: res.ok, error: res.ok ? undefined : (data.message ?? JSON.stringify(data)) });
+      const errMsg = res.ok ? undefined : (data.message ?? data.error ?? JSON.stringify(data));
+      console.log("[send-email] →", email, res.status, errMsg ?? "ok");
+      results.push({ email, ok: res.ok, error: errMsg });
     }
 
     const sent = results.filter((r) => r.ok).length;
     const failed = results.filter((r) => !r.ok);
 
+    // Surface the first Resend error prominently so it's visible in the UI
+    const firstError = failed[0]?.error;
+
     return new Response(
-      JSON.stringify({ sent, failed: failed.length, total: recipients.length, details: failed }),
+      JSON.stringify({
+        sent,
+        failed: failed.length,
+        total: recipients.length,
+        details: failed,
+        ...(failed.length > 0 && sent === 0 && firstError ? { error: firstError } : {}),
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    console.error("send-email error:", err);
+    console.error("[send-email] unhandled error:", err);
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
