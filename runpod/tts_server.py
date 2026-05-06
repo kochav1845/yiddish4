@@ -1,5 +1,7 @@
 import os
+import io
 import base64
+import shutil
 import subprocess
 import tempfile
 import traceback
@@ -12,18 +14,71 @@ import runpod
 REPO_DIR = "/app/FastSpeech2"
 CONFIG = "yivo_respelled"
 
+# RunPod Network Volume is mounted here when configured.
+# Checkpoints are cached there so they survive across cold starts.
+VOLUME_CKPT_DIR = f"/runpod-volume/ckpt/{CONFIG}"
+
 MODEL_DIR = os.environ.get(
     "MODEL_DIR",
     os.path.join(REPO_DIR, "output", "ckpt", CONFIG),
 )
 
-# Optional: set this to a direct URL to a .tar.gz, .zip, or .pth.tar file
-# containing the checkpoint(s). The server will download and extract on startup
-# when the checkpoint directory is empty.
-MODEL_DOWNLOAD_URL = os.environ.get("MODEL_DOWNLOAD_URL", "")
+# Figshare bulk download for REYD pretrained models (article 19350539).
+# Figshare blocks cloud build IPs, so we download at container startup instead.
+# Override with MODEL_DOWNLOAD_URL env var to use a mirror or direct file URL.
+FIGSHARE_URL = "https://figshare.com/ndownloader/articles/19350539/versions/1"
+MODEL_DOWNLOAD_URL = os.environ.get("MODEL_DOWNLOAD_URL", FIGSHARE_URL)
 
 _model_ready = False
 _restore_step = None
+
+
+def _http_get(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        return resp.read()
+
+
+def _extract_checkpoints_from_zip(data: bytes, dest_dir: str):
+    """
+    Handle the Figshare zip structure:
+      outer.zip
+        pretrained_models.zip
+          yivo_respelled/100000.pth.tar   <- what we want
+          yivo_original/100000.pth.tar
+          hasidic/100000.pth.tar
+    Falls back to flat extraction if that structure is not found.
+    """
+    with zipfile.ZipFile(io.BytesIO(data)) as outer:
+        names = outer.namelist()
+        print(f"[TTS] Outer zip entries: {names}")
+
+        # Look for a nested pretrained_models zip
+        inner_name = next(
+            (n for n in names if "pretrained_models" in n and n.endswith(".zip")),
+            None,
+        )
+
+        if inner_name:
+            print(f"[TTS] Found nested archive: {inner_name}")
+            inner_data = outer.read(inner_name)
+            with zipfile.ZipFile(io.BytesIO(inner_data)) as inner:
+                for entry in inner.namelist():
+                    if CONFIG in entry and entry.endswith(".pth.tar"):
+                        basename = os.path.basename(entry)
+                        out_path = os.path.join(dest_dir, basename)
+                        print(f"[TTS] Extracting {entry} -> {out_path}")
+                        with inner.open(entry) as src, open(out_path, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+        else:
+            # Flat or direct structure - grab any matching .pth.tar
+            for entry in names:
+                if entry.endswith(".pth.tar") and (CONFIG in entry or "/" not in entry):
+                    basename = os.path.basename(entry)
+                    out_path = os.path.join(dest_dir, basename)
+                    print(f"[TTS] Extracting {entry} -> {out_path}")
+                    with outer.open(entry) as src, open(out_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
 
 
 def download_checkpoints():
@@ -34,47 +89,64 @@ def download_checkpoints():
     print(f"[TTS] Downloading checkpoints from {url} ...")
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-    tmp_path, _ = urllib.request.urlretrieve(url)
+    data = _http_get(url)
+    print(f"[TTS] Downloaded {len(data):,} bytes")
 
-    try:
-        if url.endswith(".tar.gz") or url.endswith(".tgz") or tarfile.is_tarfile(tmp_path):
-            with tarfile.open(tmp_path) as tf:
-                # Extract only .pth.tar files (and any member files) flat into MODEL_DIR
-                for member in tf.getmembers():
+    if zipfile.is_zipfile(io.BytesIO(data)):
+        _extract_checkpoints_from_zip(data, MODEL_DIR)
+    elif tarfile.is_tarfile(io.BytesIO(data)):
+        with tarfile.open(fileobj=io.BytesIO(data)) as tf:
+            for member in tf.getmembers():
+                if member.name.endswith(".pth.tar") and CONFIG in member.name:
                     member.name = os.path.basename(member.name)
-                    if not member.name:
-                        continue
                     tf.extract(member, MODEL_DIR)
-            print(f"[TTS] Extracted tar archive to {MODEL_DIR}")
-        elif url.endswith(".zip") or zipfile.is_zipfile(tmp_path):
-            with zipfile.ZipFile(tmp_path) as zf:
-                for name in zf.namelist():
-                    basename = os.path.basename(name)
-                    if not basename:
-                        continue
-                    with zf.open(name) as src, open(os.path.join(MODEL_DIR, basename), "wb") as dst:
-                        dst.write(src.read())
-            print(f"[TTS] Extracted zip archive to {MODEL_DIR}")
-        else:
-            # Assume it's a raw .pth.tar checkpoint file
-            basename = os.path.basename(url.split("?")[0]) or "checkpoint.pth.tar"
-            dest = os.path.join(MODEL_DIR, basename)
-            os.rename(tmp_path, dest)
-            print(f"[TTS] Saved checkpoint to {dest}")
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    else:
+        # Raw .pth.tar file
+        basename = os.path.basename(url.split("?")[0]) or "checkpoint.pth.tar"
+        with open(os.path.join(MODEL_DIR, basename), "wb") as f:
+            f.write(data)
+        print(f"[TTS] Saved checkpoint to {MODEL_DIR}/{basename}")
 
+    ckpts = glob.glob(os.path.join(MODEL_DIR, "*.pth.tar"))
+    print(f"[TTS] Checkpoints in {MODEL_DIR}: {[os.path.basename(c) for c in ckpts]}")
+    return bool(ckpts)
+
+
+def _restore_from_volume():
+    """Copy cached checkpoints from network volume to MODEL_DIR."""
+    if not os.path.isdir(VOLUME_CKPT_DIR):
+        return False
+    ckpts = glob.glob(os.path.join(VOLUME_CKPT_DIR, "*.pth.tar"))
+    if not ckpts:
+        return False
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    for src in ckpts:
+        dst = os.path.join(MODEL_DIR, os.path.basename(src))
+        if not os.path.exists(dst):
+            shutil.copy2(src, dst)
+            print(f"[TTS] Loaded from volume: {os.path.basename(src)}")
     return True
+
+
+def _cache_to_volume():
+    """Copy downloaded checkpoints to network volume for future cold starts."""
+    try:
+        os.makedirs(VOLUME_CKPT_DIR, exist_ok=True)
+        for src in glob.glob(os.path.join(MODEL_DIR, "*.pth.tar")):
+            dst = os.path.join(VOLUME_CKPT_DIR, os.path.basename(src))
+            if not os.path.exists(dst):
+                shutil.copy2(src, dst)
+                print(f"[TTS] Cached to volume: {os.path.basename(src)}")
+    except Exception as e:
+        print(f"[TTS] Could not cache to volume: {e}")
 
 
 def find_checkpoint_step():
     ckpts = glob.glob(os.path.join(MODEL_DIR, "*.pth.tar"))
     if not ckpts:
         raise RuntimeError(
-            f"No checkpoints found in {MODEL_DIR}. "
-            "Set MODEL_DIR to the directory containing .pth.tar files, "
-            "or set MODEL_DOWNLOAD_URL to a downloadable archive/checkpoint."
+            f"No checkpoints in {MODEL_DIR}. "
+            "Set MODEL_DOWNLOAD_URL or mount a RunPod Network Volume."
         )
     steps = []
     for f in ckpts:
@@ -84,8 +156,8 @@ def find_checkpoint_step():
             pass
     if not steps:
         raise RuntimeError(
-            f"Found files in {MODEL_DIR} but could not parse step numbers from filenames. "
-            "Checkpoint files must be named like '900000.pth.tar'."
+            f"Could not parse step numbers from files in {MODEL_DIR}. "
+            "Files must be named like '100000.pth.tar'."
         )
     return max(steps)
 
@@ -95,20 +167,13 @@ def ensure_model():
     if _model_ready:
         return
 
-    # If directory is missing or empty, attempt download
     ckpts = glob.glob(os.path.join(MODEL_DIR, "*.pth.tar"))
     if not ckpts:
-        if MODEL_DOWNLOAD_URL:
+        # Try network volume cache first (fast)
+        if not _restore_from_volume():
+            # Fall back to downloading from source
             download_checkpoints()
-        else:
-            # Print helpful diagnostics
-            print(f"[TTS] MODEL_DIR contents ({MODEL_DIR}):")
-            if os.path.isdir(MODEL_DIR):
-                for f in os.listdir(MODEL_DIR):
-                    print(f"  {f}")
-            else:
-                print("  (directory does not exist)")
-            print("[TTS] Tip: set MODEL_DOWNLOAD_URL or mount a network volume with the checkpoints.")
+            _cache_to_volume()
 
     _restore_step = find_checkpoint_step()
     print(f"[TTS] Using checkpoint step {_restore_step} from {MODEL_DIR}")

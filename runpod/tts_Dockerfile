@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 # REYD Yiddish TTS - RunPod Serverless Endpoint
-# Checkpoints are downloaded automatically from Figshare during docker build.
-# No manual steps or environment variables required.
+# Checkpoints are downloaded from Figshare on first container startup,
+# not at build time (Figshare blocks cloud build IPs).
+# Use a RunPod Network Volume mounted at /runpod-volume to persist checkpoints
+# across cold starts.
 
 FROM ubuntu:22.04
 
@@ -35,11 +37,6 @@ RUN pip install --no-cache-dir \
     matplotlib==3.7.2 \
     tqdm==4.65.0 \
     runpod
-
-COPY runpod/download_reyd.py /app/download_reyd.py
-
-# Download REYD pre-trained checkpoints from Figshare via their public API.
-RUN python3 /app/download_reyd.py
 
 COPY runpod/tts_server.py /app/tts_server.py
 
