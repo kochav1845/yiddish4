@@ -40,9 +40,8 @@ async function handleSubmit(req: Request): Promise<Response> {
   console.log(`[SUBMIT] ${audioFile.name}, ${audioFile.size} bytes, ${inputLang} -> ${outputLang}`);
 
   if (inputLang === "yiddish") {
-    const runpodUrl = Deno.env.get("RUNPOD_URL");
+    const runpodUrl = "https://api.runpod.ai/v2/c5y5e4hr3v3496";
     const runpodApiKey = Deno.env.get("RUNPOD_API_KEY");
-    if (!runpodUrl) return jsonRes({ error: "RunPod not configured" }, 500);
     if (!runpodApiKey) return jsonRes({ error: "RunPod API key not configured" }, 500);
 
     const buf = await audioFile.arrayBuffer();
@@ -148,9 +147,9 @@ async function handleSubmit(req: Request): Promise<Response> {
 }
 
 async function handleStatusCheck(jobId: string): Promise<Response> {
-  const runpodUrl = Deno.env.get("RUNPOD_URL");
+  const runpodUrl = "https://api.runpod.ai/v2/c5y5e4hr3v3496";
   const runpodApiKey = Deno.env.get("RUNPOD_API_KEY");
-  if (!runpodUrl || !runpodApiKey) return jsonRes({ error: "RunPod not configured" }, 500);
+  if (!runpodApiKey) return jsonRes({ error: "RunPod not configured" }, 500);
 
   const res = await fetch(`${runpodUrl}/status/${jobId}`, {
     headers: { "Authorization": `Bearer ${runpodApiKey}` },
