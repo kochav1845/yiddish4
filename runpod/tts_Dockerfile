@@ -1,10 +1,7 @@
 # syntax=docker/dockerfile:1
-# REYD Yiddish TTS — RunPod Serverless Endpoint
-#
-# The REYD model checkpoints are downloaded automatically from Figshare
-# (https://figshare.com/articles/software/REYD_demo_files/19350539)
-)
-# during the Docker build. No manual step required.
+# REYD Yiddish TTS - RunPod Serverless Endpoint
+# Checkpoints are downloaded automatically from Figshare during docker build.
+# No manual steps or environment variables required.
 
 FROM ubuntu:22.04
 
@@ -21,11 +18,9 @@ RUN python3.10 -m pip install --upgrade pip && \
     ln -sf /usr/bin/python3.10 /usr/local/bin/python && \
     ln -sf /usr/bin/python3.10 /usr/local/bin/python3
 
-# PyTorch 2.7+ with CUDA 12.8 — bundles its own CUDA runtime (sm_120 support)
 RUN pip install --no-cache-dir torch \
     --index-url https://download.pytorch.org/whl/cu128
 
-# Clone REYD FastSpeech2 fork
 RUN git clone https://github.com/REYD-TTS/FastSpeech2 /app/FastSpeech2
 
 WORKDIR /app/FastSpeech2
@@ -41,8 +36,6 @@ RUN pip install --no-cache-dir \
     tqdm==4.65.0 \
     runpod
 
-# Download REYD pre-trained checkpoints from Figshare (public, no auth required).
-# The article zip contains .pth.tar checkpoint files and config/preprocessed data.
 RUN mkdir -p /app/FastSpeech2/output/ckpt/yivo_respelled && \
     mkdir -p /tmp/reyd_download && \
     echo "[build] Downloading REYD model files from Figshare..." && \
