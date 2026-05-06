@@ -5,6 +5,14 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export const ADMIN_EMAIL = "a88933513@gmail.com";
+
+export interface Profile {
+  id: string;
+  email: string | null;
+  created_at: string;
+}
+
 export interface Transcription {
   id: string;
   user_id: string | null;

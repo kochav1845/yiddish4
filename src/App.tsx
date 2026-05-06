@@ -5,7 +5,9 @@ import { NavigationProvider, useNavigation } from "./contexts/NavigationContext"
 import LoginPage from "./pages/LoginPage";
 import TranscriptionPage from "./pages/TranscriptionPage";
 import DatasetPage from "./pages/DatasetPage";
+import AdminPage from "./pages/AdminPage";
 import LandingPage from "./pages/LandingPage";
+import { ADMIN_EMAIL } from "./lib/supabase";
 import { Loader2 } from "lucide-react";
 
 function AppContent() {
@@ -24,7 +26,13 @@ function AppContent() {
   if (user) {
     return (
       <SiteContentProvider>
-        {activePage === "dataset" ? <DatasetPage /> : <TranscriptionPage />}
+        {activePage === "admin" && user.email === ADMIN_EMAIL ? (
+          <AdminPage />
+        ) : activePage === "dataset" ? (
+          <DatasetPage />
+        ) : (
+          <TranscriptionPage />
+        )}
       </SiteContentProvider>
     );
   }

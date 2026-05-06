@@ -3,6 +3,7 @@ import { stripDiacritics } from "../lib/textUtils";
 import AudioInput from "../components/AudioInput";
 import TranscriptionResult from "../components/TranscriptionResult";
 import TranscriptionHistory from "../components/TranscriptionHistory";
+import AddToDatasetPanel from "../components/AddToDatasetPanel";
 import AppHeader from "../components/AppHeader";
 import LanguageSelector, {
   type Language,
@@ -30,6 +31,8 @@ export default function TranscriptionPage() {
     filename: string;
     outputLang: Language;
   } | null>(null);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [showDatasetPanel, setShowDatasetPanel] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<Transcription[]>([]);
@@ -122,10 +125,40 @@ export default function TranscriptionPage() {
     await loadHistory();
   };
 
+  const handleSaveToDataset = async (correctedText: string) => {
+    if (!user || !currentFile) throw new Error("No file available");
+
+    const ext = currentFile.name.split(".").pop() ?? "webm";
+    const uniqueName = `${crypto.randomUUID()}.${ext}`;
+    const storagePath = `${user.id}/${uniqueName}`;
+
+    const { error: storageErr } = await supabase.storage
+      .from("dataset-audio")
+      .upload(storagePath, currentFile, { contentType: currentFile.type });
+
+    if (storageErr) throw new Error("Failed to upload audio. Please try again.");
+
+    const { error: dbErr } = await supabase.from("dataset_items").insert({
+      user_id: user.id,
+      filename: currentFile.name,
+      storage_path: storagePath,
+      transcription: correctedText,
+      language: outputLanguage,
+      file_size_bytes: currentFile.size,
+    });
+
+    if (dbErr) {
+      await supabase.storage.from("dataset-audio").remove([storagePath]);
+      throw new Error("Failed to save dataset entry. Please try again.");
+    }
+  };
+
   const handleTranscribe = async (file: File) => {
     setIsLoading(true);
     setError(null);
     setResult(null);
+    setCurrentFile(file);
+    setShowDatasetPanel(false);
     setStatusMsg("שיקט אַודיאָ...");
 
     try {
@@ -273,19 +306,33 @@ export default function TranscriptionPage() {
         )}
 
         {result && (
-          <div className="mb-8">
+          <div className="mb-8 space-y-3">
             <EditableText
               contentKey="result_heading"
               defaultValue="טראַנסקריפּציע"
               as="h3"
-              className="text-sm font-semibold text-stone-500 uppercase tracking-wider mb-3 font-hebrew"
+              className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew"
               dir="rtl"
             />
             <TranscriptionResult
               text={result.text}
               filename={result.filename}
               language={result.outputLang}
+              onAddToDataset={
+                currentFile && !showDatasetPanel
+                  ? () => setShowDatasetPanel(true)
+                  : undefined
+              }
             />
+            {showDatasetPanel && currentFile && (
+              <AddToDatasetPanel
+                transcription={result.text}
+                language={result.outputLang}
+                file={currentFile}
+                onSave={handleSaveToDataset}
+                onDismiss={() => setShowDatasetPanel(false)}
+              />
+            )}
           </div>
         )}
 

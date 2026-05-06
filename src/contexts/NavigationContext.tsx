@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from "react";
 
-export type Page = "transcription" | "dataset";
+export type Page = "transcription" | "dataset" | "admin";
 
 interface NavigationState {
   activePage: Page;

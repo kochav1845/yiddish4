@@ -1,11 +1,13 @@
-import { Mic2, LogOut, Database } from "lucide-react";
+import { Mic2, LogOut, Database, Shield } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigation } from "../contexts/NavigationContext";
 import EditableText from "./EditableText";
+import { ADMIN_EMAIL } from "../lib/supabase";
 
 export default function AppHeader() {
   const { user, signOut } = useAuth();
   const { activePage, navigate } = useNavigation();
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-stone-200/80 sticky top-0 z-50">
@@ -55,6 +57,19 @@ export default function AppHeader() {
             <Database size={14} />
             <span className="hidden sm:inline">Dataset</span>
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => navigate("admin")}
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-150 ${
+                activePage === "admin"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              <Shield size={14} />
+              <span className="hidden sm:inline">Admin</span>
+            </button>
+          )}
         </nav>
 
         {/* User / logout */}
