@@ -2,28 +2,38 @@
 # REYD Yiddish TTS — RunPod Serverless Endpoint
 #
 # Models are NOT baked into the image.
-# Mount your RunPod Network Volume at /runpod-volume and set:
-#   MODEL_DIR=/runpod-volume/reyd_models   (or wherever you placed the checkpoint dir)
+# Mount your RunPod Network Volume and set:
+#   MODEL_DIR=/runpod-volume/<path-to-checkpoint-dir>
 #
-# The server reads MODEL_DIR at startup to locate checkpoint files.
+# The checkpoint dir must contain *.pth.tar files.
 
-FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
+    python3.10 python3.10-dev python3-pip \
     git wget unzip ffmpeg \
     libsndfile1 libsndfile1-dev \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python3.10 -m pip install --upgrade pip && \
+    ln -sf /usr/bin/python3.10 /usr/local/bin/python && \
+    ln -sf /usr/bin/python3.10 /usr/local/bin/python3
+
+# Install PyTorch 2.7 with CUDA 12.8 (includes sm_120 / Blackwell support)
+RUN pip install --no-cache-dir \
+    torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Clone REYD FastSpeech2 fork
 RUN git clone https://github.com/REYD-TTS/FastSpeech2 /app/FastSpeech2
 
 WORKDIR /app/FastSpeech2
 
-# Install Python dependencies (torch is already in the base image)
+# Install FastSpeech2 Python dependencies
 RUN pip install --no-cache-dir \
     numpy==1.24.3 \
     scipy==1.11.1 \
@@ -48,9 +58,6 @@ import runpod
 REPO_DIR = "/app/FastSpeech2"
 CONFIG = "yivo_respelled"
 
-# If models are on a Network Volume, point MODEL_DIR to the checkpoint directory.
-# The checkpoint directory is expected to contain *.pth.tar files.
-# By default we look inside the repo's output directory.
 MODEL_DIR = os.environ.get(
     "MODEL_DIR",
     os.path.join(REPO_DIR, "output", "ckpt", CONFIG),
@@ -86,11 +93,14 @@ def ensure_model():
     _model_ready = True
 
 
+# Attempt model check at startup — non-fatal so the worker still starts.
+# It will succeed on the first request once MODEL_DIR is populated.
 try:
     ensure_model()
+    print("[TTS] Model ready at startup.")
 except Exception as e:
-    print(f"[TTS] WARNING: Model check failed at startup: {e}")
-    traceback.print_exc()
+    print(f"[TTS] WARNING: Model not available at startup ({e}). "
+          f"Set MODEL_DIR to your checkpoint directory.")
 
 
 def synthesize_text(text: str, speaker_id: int = 0) -> bytes:
