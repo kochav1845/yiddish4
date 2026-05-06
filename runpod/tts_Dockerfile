@@ -36,16 +36,26 @@ RUN pip install --no-cache-dir \
     tqdm==4.65.0 \
     runpod
 
+# Download REYD pre-trained checkpoints from Figshare via their public API.
+# The API returns individual file download URLs - more reliable than the bulk endpoint.
 RUN mkdir -p /app/FastSpeech2/output/ckpt/yivo_respelled && \
     mkdir -p /tmp/reyd_download && \
-    echo "[build] Downloading REYD model files from Figshare..." && \
-    wget -q --content-disposition \
-         "https://figshare.com/ndownloader/articles/19350539/versions/1" \
-         -O /tmp/reyd_download/reyd.zip && \
-    echo "[build] Extracting..." && \
-    unzip -q /tmp/reyd_download/reyd.zip -d /tmp/reyd_download/extracted && \
-    echo "[build] Locating checkpoint files..." && \
-    find /tmp/reyd_download/extracted -name "*.pth.tar" -exec cp {} /app/FastSpeech2/output/ckpt/yivo_respelled/ \; && \
+    echo "[build] Fetching file list from Figshare API..." && \
+    python3 -c "\
+import urllib.request, json, os; \
+resp = urllib.request.urlopen('https://api.figshare.com/v2/articles/19350539/files'); \
+files = json.loads(resp.read()); \
+print(f'[build] Found {len(files)} files in article'); \
+for f in files: \
+    name = f['name']; \
+    url = f['download_url']; \
+    dest = f'/tmp/reyd_download/{name}'; \
+    print(f'[build] Downloading {name} ...'); \
+    urllib.request.urlretrieve(url, dest); \
+    print(f'[build] Done: {name}'); \
+" && \
+    echo "[build] Copying checkpoint files..." && \
+    find /tmp/reyd_download -name "*.pth.tar" -exec cp {} /app/FastSpeech2/output/ckpt/yivo_respelled/ \; && \
     echo "[build] Checkpoints installed:" && \
     ls /app/FastSpeech2/output/ckpt/yivo_respelled/ && \
     rm -rf /tmp/reyd_download
