@@ -1,6 +1,8 @@
 import { useState, useRef } from "react";
-import { Volume2, Loader2, Play, Pause, RotateCcw, User } from "lucide-react";
+import { Volume2, Loader2, Play, Pause, RotateCcw, User, Database, CheckCircle2 } from "lucide-react";
 import AppHeader from "../components/AppHeader";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -19,12 +21,17 @@ const EXAMPLE_TEXTS = [
 ];
 
 export default function SpeakPage() {
+  const { user } = useAuth();
   const [text, setText] = useState("");
   const [speakerId, setSpeakerId] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [datasetSaving, setDatasetSaving] = useState(false);
+  const [datasetSaved, setDatasetSaved] = useState(false);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleSpeak = async () => {
@@ -32,6 +39,9 @@ export default function SpeakPage() {
     setLoading(true);
     setError(null);
     setAudioUrl(null);
+    setAudioBlob(null);
+    setDatasetSaved(false);
+    setDatasetError(null);
 
     try {
       const res = await fetch(TTS_URL, {
@@ -50,15 +60,15 @@ export default function SpeakPage() {
         return;
       }
 
-      // Convert base64 WAV to blob URL
       const byteStr = atob(data.audio_b64);
       const bytes = new Uint8Array(byteStr.length);
       for (let i = 0; i < byteStr.length; i++) bytes[i] = byteStr.charCodeAt(i);
       const blob = new Blob([bytes], { type: "audio/wav" });
       const url = URL.createObjectURL(blob);
+
+      setAudioBlob(blob);
       setAudioUrl(url);
 
-      // Auto-play
       setTimeout(() => {
         if (audioRef.current) {
           audioRef.current.src = url;
@@ -70,6 +80,43 @@ export default function SpeakPage() {
       setError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveToDataset = async () => {
+    if (!user || !audioBlob || !text.trim()) return;
+    setDatasetSaving(true);
+    setDatasetError(null);
+
+    try {
+      const filename = `tts-${SPEAKERS[speakerId].label}-${Date.now()}.wav`;
+      const storagePath = `${user.id}/${crypto.randomUUID()}.wav`;
+
+      const { error: storageErr } = await supabase.storage
+        .from("dataset-audio")
+        .upload(storagePath, audioBlob, { contentType: "audio/wav" });
+
+      if (storageErr) throw new Error("Failed to upload audio.");
+
+      const { error: dbErr } = await supabase.from("dataset_items").insert({
+        user_id: user.id,
+        filename,
+        storage_path: storagePath,
+        transcription: text.trim(),
+        language: "yiddish",
+        file_size_bytes: audioBlob.size,
+      });
+
+      if (dbErr) {
+        await supabase.storage.from("dataset-audio").remove([storagePath]);
+        throw new Error("Failed to save dataset entry.");
+      }
+
+      setDatasetSaved(true);
+    } catch (err) {
+      setDatasetError(err instanceof Error ? err.message : "Failed to save to dataset.");
+    } finally {
+      setDatasetSaving(false);
     }
   };
 
@@ -157,7 +204,6 @@ export default function SpeakPage() {
               placeholder="שרייבט דא אייַדיש טעקסט..."
               className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 text-lg leading-relaxed font-hebrew text-right resize-y focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all placeholder:text-stone-300"
             />
-            {/* Quick examples */}
             <div className="flex flex-wrap gap-1.5 mt-2">
               {EXAMPLE_TEXTS.map((ex) => (
                 <button
@@ -201,8 +247,8 @@ export default function SpeakPage() {
 
         {/* Audio player */}
         {audioUrl && (
-          <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5 animate-slide-up">
-            <p className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-4">
+          <div className="bg-white border border-stone-200 rounded-2xl shadow-sm p-5 animate-slide-up space-y-4">
+            <p className="text-xs font-semibold text-stone-400 uppercase tracking-wider">
               Audio output
             </p>
             <audio
@@ -248,6 +294,33 @@ export default function SpeakPage() {
               >
                 Download
               </a>
+            </div>
+
+            {/* Save to dataset */}
+            <div className="border-t border-stone-100 pt-4">
+              {datasetSaved ? (
+                <div className="flex items-center gap-2.5 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                  <CheckCircle2 size={16} className="flex-shrink-0" />
+                  <p className="text-sm font-medium">Saved to dataset</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    onClick={handleSaveToDataset}
+                    disabled={datasetSaving || !user}
+                    className="flex items-center gap-2 bg-stone-800 hover:bg-stone-900 disabled:bg-stone-200 disabled:text-stone-400 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                  >
+                    {datasetSaving
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <Database size={14} />
+                    }
+                    {datasetSaving ? "Saving…" : "Save to Dataset"}
+                  </button>
+                  {datasetError && (
+                    <p className="text-xs text-red-600">{datasetError}</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

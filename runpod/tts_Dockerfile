@@ -1,11 +1,17 @@
 # syntax=docker/dockerfile:1
 # REYD Yiddish TTS — RunPod Serverless Endpoint
 #
-# Mount your RunPod Network Volume and set:
-#   MODEL_DIR=/runpod-volume/<path-to-dir-containing-pth.tar-files>
+# Option A — bake the checkpoint into the image at build time (recommended):
+#   docker build -f runpod/tts_Dockerfile \
+#     --build-arg MODEL_DOWNLOAD_URL=https://your-host/yivo_respelled.tar.gz \
+#     -t yiddish-tts .
 #
-# Uses ubuntu:22.04 base (not nvidia/cuda) to avoid duplicating ~4GB of CUDA
-# libraries that pip's torch+cu128 packages already bundle.
+# Option B — download at runtime (no rebuild needed when updating the model):
+#   Set MODEL_DOWNLOAD_URL=<url> as an environment variable on the RunPod endpoint.
+#   The server will download and extract on first cold start.
+#
+# Option C — RunPod Network Volume (fastest cold start after the first):
+#   Mount the volume and set MODEL_DIR=/runpod-volume/<path-containing-pth.tar-files>
 
 FROM ubuntu:22.04
 
@@ -14,7 +20,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y \
     python3.10 python3.10-dev python3-pip \
-    git wget unzip ffmpeg \
+    git wget curl unzip ffmpeg \
     libsndfile1 libsndfile1-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -43,5 +49,31 @@ RUN pip install --no-cache-dir \
     runpod
 
 COPY runpod/tts_server.py /app/tts_server.py
+
+# Optional: bake the checkpoint into the image at build time.
+# Pass --build-arg MODEL_DOWNLOAD_URL=<url> to docker build.
+# Supported formats: .tar.gz, .tgz, .zip, or a raw .pth.tar file.
+ARG MODEL_DOWNLOAD_URL=""
+RUN if [ -n "$MODEL_DOWNLOAD_URL" ]; then \
+      echo "[build] Downloading checkpoint from $MODEL_DOWNLOAD_URL" && \
+      mkdir -p /app/FastSpeech2/output/ckpt/yivo_respelled && \
+      cd /tmp && \
+      curl -fSL -o model_ckpt "$MODEL_DOWNLOAD_URL" && \
+      file_type=$(file -b --mime-type model_ckpt) && \
+      echo "[build] Detected type: $file_type" && \
+      if echo "$file_type" | grep -q "gzip\|tar"; then \
+        tar -xf model_ckpt -C /app/FastSpeech2/output/ckpt/yivo_respelled --strip-components=1 2>/dev/null || \
+        tar -xf model_ckpt -C /app/FastSpeech2/output/ckpt/yivo_respelled; \
+      elif echo "$file_type" | grep -q "zip"; then \
+        unzip -j model_ckpt -d /app/FastSpeech2/output/ckpt/yivo_respelled; \
+      else \
+        name=$(basename "$MODEL_DOWNLOAD_URL" | sed 's/?.*//' | grep -o '[^/]*\.pth\.tar' || echo "checkpoint.pth.tar") && \
+        cp model_ckpt /app/FastSpeech2/output/ckpt/yivo_respelled/$name; \
+      fi && \
+      rm -f /tmp/model_ckpt && \
+      echo "[build] Checkpoint files:" && \
+      ls /app/FastSpeech2/output/ckpt/yivo_respelled/; \
+    ]
+    fi
 
 CMD ["python", "/app/tts_server.py"]
