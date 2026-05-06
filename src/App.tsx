@@ -8,6 +8,7 @@ import DatasetPage from "./pages/DatasetPage";
 import AdminPage from "./pages/AdminPage";
 import SpeakPage from "./pages/SpeakPage";
 import LandingPage from "./pages/LandingPage";
+import ContactPopup from "./components/ContactPopup";
 import { ADMIN_EMAIL } from "./lib/supabase";
 import { Loader2 } from "lucide-react";
 
@@ -52,6 +53,7 @@ export default function App() {
     <AuthProvider>
       <NavigationProvider>
         <AppContent />
+        <ContactPopup />
       </NavigationProvider>
     </AuthProvider>
   );
