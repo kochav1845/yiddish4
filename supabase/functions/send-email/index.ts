@@ -8,7 +8,8 @@ const corsHeaders = {
 };
 
 const ADMIN_EMAIL = "a88933513@gmail.com";
-const FROM_ADDRESS = "heimishgeredt <noreply@stardev.dev>";
+const FROM_EMAIL = "noreply@stardev.dev";
+const FROM_NAME = "heimishgeredt";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -71,43 +72,47 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-    if (!RESEND_API_KEY) {
-      console.log("[send-email] RESEND_API_KEY is missing");
+    const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY");
+    if (!SENDGRID_API_KEY) {
+      console.log("[send-email] SENDGRID_API_KEY is missing");
       return new Response(
-        JSON.stringify({ error: "RESEND_API_KEY is not configured" }),
+        JSON.stringify({ error: "SENDGRID_API_KEY is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    console.log("[send-email] sending from:", FROM_ADDRESS);
+    console.log("[send-email] sending from:", FROM_EMAIL, "to", recipients.length, "recipients");
 
     const results: { email: string; ok: boolean; error?: string }[] = [];
 
     for (const email of recipients) {
-      const res = await fetch("https://api.resend.com/emails", {
+      const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
+          Authorization: `Bearer ${SENDGRID_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: FROM_ADDRESS,
-          to: [email],
+          personalizations: [{ to: [{ email }] }],
+          from: { email: FROM_EMAIL, name: FROM_NAME },
           subject,
-          html,
+          content: [{ type: "text/html", value: html }],
         }),
       });
-      const data = await res.json();
-      const errMsg = res.ok ? undefined : (data.message ?? data.error ?? JSON.stringify(data));
+
+      // SendGrid returns 202 on success with no body
+      let errMsg: string | undefined;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        errMsg = data?.errors?.[0]?.message ?? data?.message ?? `HTTP ${res.status}`;
+      }
+
       console.log("[send-email] →", email, res.status, errMsg ?? "ok");
       results.push({ email, ok: res.ok, error: errMsg });
     }
 
     const sent = results.filter((r) => r.ok).length;
     const failed = results.filter((r) => !r.ok);
-
-    // Surface the first Resend error prominently so it's visible in the UI
     const firstError = failed[0]?.error;
 
     return new Response(
