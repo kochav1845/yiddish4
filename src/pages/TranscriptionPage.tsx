@@ -259,6 +259,12 @@ export default function TranscriptionPage() {
     setHistory((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const handleEdited = (id: string, newText: string) => {
+    setHistory((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, transcription: newText } : item))
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100/50">
       <AppHeader />
@@ -336,7 +342,7 @@ export default function TranscriptionPage() {
           </div>
         )}
 
-        <TranscriptionHistory items={history} onDelete={handleDelete} />
+        <TranscriptionHistory items={history} onDelete={handleDelete} onEdited={handleEdited} />
       </main>
 
       <footer className="text-center text-stone-400 text-xs py-6 sm:py-8 font-hebrew">

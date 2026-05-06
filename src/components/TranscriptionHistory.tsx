@@ -7,14 +7,20 @@ import {
   Trash2,
   ArrowLeft,
   Type,
+  Pencil,
+  Check,
+  X,
+  Loader2,
 } from "lucide-react";
 import type { Transcription } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import EditableText from "./EditableText";
 import { stripDiacritics } from "../lib/textUtils";
 
 interface TranscriptionHistoryProps {
   items: Transcription[];
   onDelete?: (id: string) => void;
+  onEdited?: (id: string, newText: string) => void;
 }
 
 const RTL_LANGUAGES = new Set(["yiddish", "hebrew"]);
@@ -57,9 +63,14 @@ function langBadgeColor(lang: string) {
 export default function TranscriptionHistory({
   items,
   onDelete,
+  onEdited,
 }: TranscriptionHistoryProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fontOverrides, setFontOverrides] = useState<Record<string, "tree" | "reponzel">>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (items.length === 0) {
     return (
@@ -92,6 +103,37 @@ export default function TranscriptionHistory({
     }));
   };
 
+  const startEdit = (item: Transcription) => {
+    setEditing(item.id);
+    setEditText(stripDiacritics(item.transcription ?? ""));
+    setSaveError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setEditText("");
+    setSaveError(null);
+  };
+
+  const saveEdit = async (id: string) => {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setSaveError(null);
+    const { error } = await supabase
+      .from("transcriptions")
+      .update({ transcription: trimmed })
+      .eq("id", id);
+    setSaving(false);
+    if (error) {
+      setSaveError("Failed to save. Please try again.");
+      return;
+    }
+    onEdited?.(id, trimmed);
+    setEditing(null);
+    setEditText("");
+  };
+
   return (
     <div dir="rtl">
       <h2 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2 font-hebrew">
@@ -115,6 +157,7 @@ export default function TranscriptionHistory({
               ? "font-hebrew"
               : "font-display text-[3em] leading-[1.6]"
             : "font-hebrew";
+          const isEditing = editing === item.id;
 
           return (
             <div
@@ -122,6 +165,7 @@ export default function TranscriptionHistory({
               className="bg-white border border-stone-200/80 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 animate-fade-in"
               style={{ animationDelay: `${i * 50}ms` }}
             >
+              {/* Header toggle — only toggle/delete live here */}
               <button
                 onClick={() =>
                   setExpanded(expanded === item.id ? null : item.id)
@@ -197,10 +241,27 @@ export default function TranscriptionHistory({
                   )}
                 </div>
               </button>
+
+              {/* Expanded area — completely outside the toggle button, stopPropagation prevents any accidental bubbling */}
               {expanded === item.id && (
-                <div className="border-t border-stone-100 animate-fade-in">
-                  {isYiddish && (
-                    <div className="flex justify-end px-5 pt-3">
+                <div
+                  className="border-t border-stone-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between px-3 sm:px-5 pt-3 pb-1">
+                    <div className="flex items-center gap-1.5">
+                      {!isEditing && (
+                        <button
+                          onClick={() => startEdit(item)}
+                          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors duration-200 hover:bg-amber-100 text-amber-600"
+                          title="Edit transcription"
+                        >
+                          <Pencil size={12} />
+                          <span>Edit</span>
+                        </button>
+                      )}
+                    </div>
+                    {isYiddish && !isEditing && (
                       <button
                         onClick={() => toggleFont(item.id)}
                         className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors duration-200 hover:bg-stone-200 text-stone-500 font-hebrew"
@@ -210,21 +271,62 @@ export default function TranscriptionHistory({
                           {currentFont === "tree" ? "עץ הדעת" : "רעפנצל"}
                         </span>
                       </button>
+                    )}
+                  </div>
+
+                  {isEditing ? (
+                    <div className="px-3 sm:px-5 pb-4 sm:pb-5 pt-2 space-y-3">
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        dir={isRtl ? "rtl" : "ltr"}
+                        lang={outLang === "yiddish" ? "yi" : outLang === "hebrew" ? "he" : "en"}
+                        rows={6}
+                        className={`w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-stone-800 text-sm leading-relaxed resize-y focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all font-hebrew ${isRtl ? "text-right" : "text-left"}`}
+                        autoFocus
+                      />
+                      {saveError && (
+                        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          {saveError}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => saveEdit(item.id)}
+                          disabled={saving || !editText.trim()}
+                          className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:bg-stone-200 disabled:text-stone-400 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
+                        >
+                          {saving ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Check size={12} />
+                          )}
+                          {saving ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="flex items-center gap-1.5 text-stone-400 hover:text-stone-600 text-xs font-medium px-3 py-2 rounded-lg hover:bg-stone-100 transition-colors"
+                        >
+                          <X size={12} />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      dir={isRtl ? "rtl" : "ltr"}
+                      lang={
+                        outLang === "yiddish"
+                          ? "yi"
+                          : outLang === "hebrew"
+                          ? "he"
+                          : "en"
+                      }
+                      className={`px-3 sm:px-5 pb-4 sm:pb-5 pt-2 text-stone-700 ${fontClass}`}
+                    >
+                      {stripDiacritics(item.transcription ?? "")}
                     </div>
                   )}
-                  <div
-                    dir={isRtl ? "rtl" : "ltr"}
-                    lang={
-                      outLang === "yiddish"
-                        ? "yi"
-                        : outLang === "hebrew"
-                        ? "he"
-                        : "en"
-                    }
-                    className={`px-3 sm:px-5 pb-4 sm:pb-5 pt-2 text-stone-700 ${fontClass}`}
-                  >
-                    {stripDiacritics(item.transcription ?? "")}
-                  </div>
                 </div>
               )}
             </div>
