@@ -6,6 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const RUNPOD_BASE = "https://api.runpod.ai/v2/5e4qz9p7usxg5e";
 const POLL_INTERVAL_MS = 2000;
 const MAX_WAIT_MS = 120_000;
 
@@ -15,12 +16,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const RUNPOD_TTS_URL = Deno.env.get("RUNPOD_TTS_URL");
     const RUNPOD_API_KEY = Deno.env.get("RUNPOD_API_KEY");
 
-    if (!RUNPOD_TTS_URL || !RUNPOD_API_KEY) {
+    if (!RUNPOD_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "TTS service not configured. RUNPOD_TTS_URL or RUNPOD_API_KEY missing." }),
+        JSON.stringify({ error: "TTS service not configured. RUNPOD_API_KEY missing." }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -37,7 +37,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Submit job to RunPod
-    const submitRes = await fetch(`${RUNPOD_TTS_URL}/run`, {
+    const submitRes = await fetch(`${RUNPOD_BASE}/run`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${RUNPOD_API_KEY}`,
@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
 
     const submitData = await submitRes.json();
 
-    // Handle synchronous response (RunPod may return immediately)
+    // Synchronous response — RunPod returned audio immediately
     if (submitData.output?.audio_b64) {
       return new Response(
         JSON.stringify({ audio_b64: submitData.output.audio_b64, format: "wav" }),
@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Poll for completion
-    const statusUrl = `${RUNPOD_TTS_URL}/status/${jobId}`;
+    const statusUrl = `${RUNPOD_BASE}/status/${jobId}`;
     const started = Date.now();
 
     while (Date.now() - started < MAX_WAIT_MS) {

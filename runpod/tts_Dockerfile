@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
-# REYD Yiddish TTS RunPod Serverless Endpoint
-# Self-contained — no external files needed at build time.
+# REYD Yiddish TTS — RunPod Serverless Endpoint
 #
-# Build:
-#   docker build -f tts_Dockerfile -t your-registry/yiddish-tts:latest .
-# Or paste into the RunPod template "Docker Image\" field (custom build).
+# Models are NOT baked into the image.
+# Mount your RunPod Network Volume at /runpod-volume and set:
+#   MODEL_DIR=/runpod-volume/reyd_models   (or wherever you placed the checkpoint dir)
+#
+# The server reads MODEL_DIR at startup to locate checkpoint files.
 
 FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
 
@@ -22,14 +23,7 @@ RUN git clone https://github.com/REYD-TTS/FastSpeech2 /app/FastSpeech2
 
 WORKDIR /app/FastSpeech2
 
-# Download REYD pretrained model weights from Figshare
-RUN wget --content-disposition \
-    "https://figshare.com/ndownloader/articles/19350539/versions/1" \
-    -O reyd_models.zip \
-    && unzip -o reyd_models.zip \
-    && rm reyd_models.zip
-
-# Install FastSpeech2 Python dependencies
+# Install Python dependencies
 RUN pip install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cu117 \
     numpy==1.24.3 \
@@ -55,15 +49,22 @@ import runpod
 REPO_DIR = "/app/FastSpeech2"
 CONFIG = "yivo_respelled"
 
+# If models are on a Network Volume, point MODEL_DIR to the checkpoint directory.
+# The checkpoint directory is expected to contain *.pth.tar files.
+# By default we look inside the repo's output directory.
+MODEL_DIR = os.environ.get(
+    "MODEL_DIR",
+    os.path.join(REPO_DIR, "output", "ckpt", CONFIG),
+)
+
 _model_ready = False
 _restore_step = None
 
 
 def find_checkpoint_step():
-    ckpt_dir = os.path.join(REPO_DIR, "output", "ckpt", CONFIG)
-    ckpts = glob.glob(os.path.join(ckpt_dir, "*.pth.tar"))
+    ckpts = glob.glob(os.path.join(MODEL_DIR, "*.pth.tar"))
     if not ckpts:
-        raise RuntimeError(f"No checkpoints found in {ckpt_dir}")
+        raise RuntimeError(f"No checkpoints found in {MODEL_DIR}")
     steps = []
     for f in ckpts:
         basename = os.path.basename(f)
@@ -82,7 +83,7 @@ def ensure_model():
     if _model_ready:
         return
     _restore_step = find_checkpoint_step()
-    print(f"[TTS] Using checkpoint step {_restore_step}")
+    print(f"[TTS] Using checkpoint step {_restore_step} from {MODEL_DIR}")
     _model_ready = True
 
 
