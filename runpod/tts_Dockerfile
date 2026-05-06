@@ -3,8 +3,11 @@
 #
 # Mount your RunPod Network Volume and set:
 #   MODEL_DIR=/runpod-volume/<path-to-dir-containing-pth.tar-files>
+#
+# Uses ubuntu:22.04 base (not nvidia/cuda) to avoid duplicating ~4GB of CUDA
+# libraries that pip's torch+cu128 packages already bundle.
 
-FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -19,7 +22,7 @@ RUN python3.10 -m pip install --upgrade pip && \
     ln -sf /usr/bin/python3.10 /usr/local/bin/python && \
     ln -sf /usr/bin/python3.10 /usr/local/bin/python3
 
-# PyTorch 2.7 with CUDA 12.8 — includes sm_120 (Blackwell / RTX 5090)
+# PyTorch 2.7+ with CUDA 12.8 — bundles its own CUDA runtime (sm_120 support)
 RUN pip install --no-cache-dir torch \
     --index-url https://download.pytorch.org/whl/cu128
 

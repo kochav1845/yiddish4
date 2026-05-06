@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -17,7 +17,7 @@ RUN python3.10 -m pip install --upgrade pip && \
 
 RUN git lfs install
 
-# PyTorch 2.7 with CUDA 12.8 — includes sm_120 (Blackwell / RTX 5090)
+# PyTorch 2.7+ with CUDA 12.8 — bundles its own CUDA runtime (sm_120 support)
 RUN pip install --no-cache-dir torch \
     --index-url https://download.pytorch.org/whl/cu128
 
