@@ -1,4 +1,4 @@
-import { Mic2, LogOut, Database, Shield } from "lucide-react";
+import { Mic2, LogOut, Database, Shield, Volume2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigation } from "../contexts/NavigationContext";
 import EditableText from "./EditableText";
@@ -8,6 +8,13 @@ export default function AppHeader() {
   const { user, signOut } = useAuth();
   const { activePage, navigate } = useNavigation();
   const isAdmin = user?.email === ADMIN_EMAIL;
+
+  const navItems = [
+    { id: "transcription" as const, label: "Transcribe", icon: Mic2 },
+    { id: "speak" as const, label: "Speak", icon: Volume2 },
+    { id: "dataset" as const, label: "Dataset", icon: Database },
+    ...(isAdmin ? [{ id: "admin" as const, label: "Admin", icon: Shield }] : []),
+  ];
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-stone-200/80 sticky top-0 z-50">
@@ -35,41 +42,20 @@ export default function AppHeader() {
 
         {/* Nav */}
         <nav className="flex items-center bg-stone-100 rounded-xl p-1 gap-0.5 sm:gap-1 flex-shrink-0">
-          <button
-            onClick={() => navigate("transcription")}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-150 ${
-              activePage === "transcription"
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
-            }`}
-          >
-            <Mic2 size={14} />
-            <span className="hidden sm:inline">Transcribe</span>
-          </button>
-          <button
-            onClick={() => navigate("dataset")}
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-150 ${
-              activePage === "dataset"
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-500 hover:text-stone-700"
-            }`}
-          >
-            <Database size={14} />
-            <span className="hidden sm:inline">Dataset</span>
-          </button>
-          {isAdmin && (
+          {navItems.map(({ id, label, icon: Icon }) => (
             <button
-              onClick={() => navigate("admin")}
+              key={id}
+              onClick={() => navigate(id)}
               className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-150 ${
-                activePage === "admin"
+                activePage === id
                   ? "bg-white text-stone-900 shadow-sm"
                   : "text-stone-500 hover:text-stone-700"
               }`}
             >
-              <Shield size={14} />
-              <span className="hidden sm:inline">Admin</span>
+              <Icon size={14} />
+              <span className="hidden sm:inline">{label}</span>
             </button>
-          )}
+          ))}
         </nav>
 
         {/* User / logout */}

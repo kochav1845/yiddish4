@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import TranscriptionPage from "./pages/TranscriptionPage";
 import DatasetPage from "./pages/DatasetPage";
 import AdminPage from "./pages/AdminPage";
+import SpeakPage from "./pages/SpeakPage";
 import LandingPage from "./pages/LandingPage";
 import { ADMIN_EMAIL } from "./lib/supabase";
 import { Loader2 } from "lucide-react";
@@ -30,6 +31,8 @@ function AppContent() {
           <AdminPage />
         ) : activePage === "dataset" ? (
           <DatasetPage />
+        ) : activePage === "speak" ? (
+          <SpeakPage />
         ) : (
           <TranscriptionPage />
         )}

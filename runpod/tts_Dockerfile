@@ -1,0 +1,46 @@
+# REYD Yiddish TTS RunPod Serverless Endpoint
+# Based on FastSpeech2 + HiFi-GAN with REYD model weights
+#
+# Build and push:
+#   docker build -f tts_Dockerfile -t your-registry/yiddish-tts:latest .
+#   docker push your-registry/yiddish-tts:latest
+#
+# Then create a new RunPod Serverless Template pointing to this image.
+
+FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    git wget unzip ffmpeg \
+    libsndfile1 libsndfile1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone REYD FastSpeech2 fork
+RUN git clone https://github.com/REYD-TTS/FastSpeech2 /app/FastSpeech2
+
+WORKDIR /app/FastSpeech2
+
+# Download REYD pretrained model weights from Figshare (article 19350539)
+RUN wget --content-disposition \
+    "https://figshare.com/ndownloader/articles/19350539/versions/1" \
+    -O reyd_models.zip \
+    && unzip -o reyd_models.zip \
+    && rm reyd_models.zip \
+    && echo "Model weights downloaded successfully"
+
+# Install Python dependencies for FastSpeech2
+COPY tts_requirements.txt /app/tts_requirements.txt
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cu118 \
+    -r /app/tts_requirements.txt
+
+# Install runpod serverless library
+RUN pip install --no-cache-dir runpod
+
+# Copy TTS server
+COPY tts_server.py /app/tts_server.py
+
+CMD ["python", "/app/tts_server.py"]
