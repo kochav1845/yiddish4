@@ -533,5 +533,3 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
     </div>
   );
 }
-
-export default AdminPage
