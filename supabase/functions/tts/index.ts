@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const RUNPOD_BASE = "https://api.runpod.ai/v2/5e4qz9p7usxg5e";
+const RUNPOD_BASE = "https://api.runpod.ai/v2/c5y5e4hr3v3496";
 const POLL_INTERVAL_MS = 2000;
 const MAX_WAIT_MS = 120_000;
 

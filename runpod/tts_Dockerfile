@@ -7,7 +7,7 @@
 #
 # The server reads MODEL_DIR at startup to locate checkpoint files.
 
-FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
+FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -23,9 +23,8 @@ RUN git clone https://github.com/REYD-TTS/FastSpeech2 /app/FastSpeech2
 
 WORKDIR /app/FastSpeech2
 
-# Install Python dependencies
+# Install Python dependencies (torch is already in the base image)
 RUN pip install --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cu117 \
     numpy==1.24.3 \
     scipy==1.11.1 \
     librosa==0.10.0 \
