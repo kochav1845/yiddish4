@@ -1,18 +1,14 @@
 # syntax=docker/dockerfile:1
 # REYD Yiddish TTS — RunPod Serverless Endpoint
 #
-# Models are NOT baked into the image.
 # Mount your RunPod Network Volume and set:
-#   MODEL_DIR=/runpod-volume/<path-to-checkpoint-dir>
-#
-# The checkpoint dir must contain *.pth.tar files.
+#   MODEL_DIR=/runpod-volume/<path-to-dir-containing-pth.tar-files>
 
-FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# System dependencies
 RUN apt-get update && apt-get install -y \
     python3.10 python3.10-dev python3-pip \
     git wget unzip ffmpeg \
@@ -23,9 +19,8 @@ RUN python3.10 -m pip install --upgrade pip && \
     ln -sf /usr/bin/python3.10 /usr/local/bin/python && \
     ln -sf /usr/bin/python3.10 /usr/local/bin/python3
 
-# Install PyTorch 2.7 with CUDA 12.8 (includes sm_120 / Blackwell support)
-RUN pip install --no-cache-dir \
-    torch torchvision torchaudio \
+# PyTorch 2.7 with CUDA 12.8 — includes sm_120 (Blackwell / RTX 5090)
+RUN pip install --no-cache-dir torch \
     --index-url https://download.pytorch.org/whl/cu128
 
 # Clone REYD FastSpeech2 fork
@@ -33,7 +28,6 @@ RUN git clone https://github.com/REYD-TTS/FastSpeech2 /app/FastSpeech2
 
 WORKDIR /app/FastSpeech2
 
-# Install FastSpeech2 Python dependencies
 RUN pip install --no-cache-dir \
     numpy==1.24.3 \
     scipy==1.11.1 \
@@ -45,110 +39,6 @@ RUN pip install --no-cache-dir \
     tqdm==4.65.0 \
     runpod
 
-# Write the TTS server directly into the image (no COPY needed)
-RUN cat > /app/tts_server.py << 'PYEOF'
-import os
-import base64
-import subprocess
-import tempfile
-import traceback
-import glob
-import runpod
-
-REPO_DIR = "/app/FastSpeech2"
-CONFIG = "yivo_respelled"
-
-MODEL_DIR = os.environ.get(
-    "MODEL_DIR",
-    os.path.join(REPO_DIR, "output", "ckpt", CONFIG),
-)
-
-_model_ready = False
-_restore_step = None
-
-
-def find_checkpoint_step():
-    ckpts = glob.glob(os.path.join(MODEL_DIR, "*.pth.tar"))
-    if not ckpts:
-        raise RuntimeError(f"No checkpoints found in {MODEL_DIR}")
-    steps = []
-    for f in ckpts:
-        basename = os.path.basename(f)
-        try:
-            step = int(basename.replace(".pth.tar", ""))
-            steps.append(step)
-        except ValueError:
-            pass
-    if not steps:
-        raise RuntimeError("Could not parse checkpoint step numbers")
-    return max(steps)
-
-
-def ensure_model():
-    global _model_ready, _restore_step
-    if _model_ready:
-        return
-    _restore_step = find_checkpoint_step()
-    print(f"[TTS] Using checkpoint step {_restore_step} from {MODEL_DIR}")
-    _model_ready = True
-
-
-# Attempt model check at startup — non-fatal so the worker still starts.
-# It will succeed on the first request once MODEL_DIR is populated.
-try:
-    ensure_model()
-    print("[TTS] Model ready at startup.")
-except Exception as e:
-    print(f"[TTS] WARNING: Model not available at startup ({e}). "
-          f"Set MODEL_DIR to your checkpoint directory.")
-
-
-def synthesize_text(text: str, speaker_id: int = 0) -> bytes:
-    ensure_model()
-    out_dir = tempfile.mkdtemp()
-    cmd = [
-        "python", "synthesize.py",
-        "--text", text,
-        "--speaker_id", str(speaker_id),
-        "--restore_step", str(_restore_step),
-        "--mode", "single",
-        "--config", f"./config/{CONFIG}/model.yaml",
-        "--result_path", out_dir,
-    ]
-    proc = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, timeout=120)
-    if proc.returncode != 0:
-        err = proc.stderr.decode(errors="replace")[:600]
-        raise RuntimeError(f"FastSpeech2 failed (exit {proc.returncode}):\n{err}")
-    wavs = glob.glob(os.path.join(out_dir, "**", "*.wav"), recursive=True)
-    if not wavs:
-        wavs = glob.glob(os.path.join(out_dir, "*.wav"))
-    if not wavs:
-        raise RuntimeError("No WAV output found")
-    with open(wavs[0], "rb") as fh:
-        return fh.read()
-
-
-def handler(job):
-    job_input = job.get("input", {})
-    text = job_input.get("text", "").strip()
-    speaker_id = int(job_input.get("speaker_id", 0))
-    if not text:
-        return {"error": "No text provided"}
-    if speaker_id not in (0, 1, 2):
-        return {"error": "speaker_id must be 0, 1, or 2"}
-    try:
-        wav_bytes = synthesize_text(text, speaker_id)
-        return {
-            "audio_b64": base64.b64encode(wav_bytes).decode("utf-8"),
-            "format": "wav",
-            "speaker_id": speaker_id,
-        }
-    except Exception as e:
-        traceback.print_exc()
-        return {"error": str(e)}
-
-
-runpod.serverless.start({"handler": handler})
-PYEOF
+COPY runpod/tts_server.py /app/tts_server.py
 
 CMD ["python", "/app/tts_server.py"]

@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
@@ -17,9 +17,8 @@ RUN python3.10 -m pip install --upgrade pip && \
 
 RUN git lfs install
 
-# Install PyTorch 2.7 with CUDA 12.8 (includes sm_120 / Blackwell support)
-RUN pip install --no-cache-dir \
-    torch torchvision torchaudio \
+# PyTorch 2.7 with CUDA 12.8 — includes sm_120 (Blackwell / RTX 5090)
+RUN pip install --no-cache-dir torch \
     --index-url https://download.pytorch.org/whl/cu128
 
 WORKDIR /app
@@ -32,7 +31,5 @@ ARG HF_TOKEN
 RUN python download_model.py
 
 COPY runpod/server.py .
-
-EXPOSE 8080
 
 CMD ["python", "-u", "server.py"]
