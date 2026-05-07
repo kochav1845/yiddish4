@@ -380,33 +380,43 @@ except Exception as _exc:
 
 def synthesize_text(text: str, speaker_id: int = 0) -> bytes:
     step = ensure_model()
-    out_dir = tempfile.mkdtemp(prefix="reyd_out_")
-    try:
-        cmd = [
-            "python", "synthesize.py",
-            "--text", text,
-            "--speaker_id", str(speaker_id),
-            "--restore_step", str(step),
-            "--mode", "single",
-            "--config", f"./config/{CONFIG}/model.yaml",
-            "--result_path", out_dir,
-        ]
-        proc = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, timeout=120)
-        if proc.returncode != 0:
-            stderr = proc.stderr.decode(errors="replace")[:800]
-            stdout = proc.stdout.decode(errors="replace")[:400]
+    result_dir = os.path.join(REPO_DIR, "output", "result", CONFIG)
+    os.makedirs(result_dir, exist_ok=True)
+
+    # Snapshot existing wavs so we can detect the new one after synthesis
+    before = set(glob.glob(os.path.join(result_dir, "**", "*.wav"), recursive=True))
+
+    cmd = [
+        "python", "synthesize.py",
+        "--text", text,
+        "--speaker_id", str(speaker_id),
+        "--restore_step", str(step),
+        "--mode", "single",
+        "-p", f"./config/{CONFIG}/preprocess.yaml",
+        "-m", f"./config/{CONFIG}/model.yaml",
+        "-t", f"./config/{CONFIG}/train.yaml",
+    ]
+    proc = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, timeout=120)
+    if proc.returncode != 0:
+        stderr = proc.stderr.decode(errors="replace")[:800]
+        stdout = proc.stdout.decode(errors="replace")[:400]
+        raise RuntimeError(
+            f"synthesize.py exit {proc.returncode}\nstderr: {stderr}\nstdout: {stdout}"
+        )
+
+    after = set(glob.glob(os.path.join(result_dir, "**", "*.wav"), recursive=True))
+    new_wavs = list(after - before)
+    if not new_wavs:
+        # Fall back to the most recently modified wav in the result dir
+        all_wavs = sorted(after, key=os.path.getmtime, reverse=True)
+        if not all_wavs:
             raise RuntimeError(
-                f"synthesize.py exit {proc.returncode}\nstderr: {stderr}\nstdout: {stdout}"
+                f"No WAV output produced. result_dir={os.listdir(result_dir)}"
             )
-        wavs = glob.glob(os.path.join(out_dir, "**", "*.wav"), recursive=True)
-        if not wavs:
-            raise RuntimeError(
-                f"No WAV output produced. out_dir={os.listdir(out_dir)}"
-            )
-        with open(wavs[0], "rb") as fh:
-            return fh.read()
-    finally:
-        shutil.rmtree(out_dir, ignore_errors=True)
+        new_wavs = [all_wavs[0]]
+
+    with open(new_wavs[0], "rb") as fh:
+        return fh.read()
 
 
 # ---------------------------------------------------------------------------
