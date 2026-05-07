@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Shield,
   Users,
@@ -12,6 +12,9 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
+  Play,
+  Pause,
+  Volume2,
 } from "lucide-react";
 import AppHeader from "../components/AppHeader";
 import { supabase, type Profile, type Transcription, type DatasetItem } from "../lib/supabase";
@@ -100,6 +103,12 @@ export default function AdminPage() {
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
+  // Audio playback
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
+  const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
+
   const load = useCallback(async () => {
     setLoading(true);
     const [profilesRes, transcriptionsRes, datasetRes] = await Promise.all([
@@ -130,6 +139,38 @@ export default function AdminPage() {
     return bytes < 1024 * 1024
       ? `${(bytes / 1024).toFixed(0)} KB`
       : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const handlePlayAudio = async (id: string, storagePath: string) => {
+    if (playingId === id) {
+      audioRef.current?.pause();
+      setPlayingId(null);
+      return;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setPlayingId(null);
+    }
+    let url = audioUrls[id];
+    if (!url && storagePath) {
+      setLoadingAudioId(id);
+      const { data } = await supabase.storage
+        .from("dataset-audio")
+        .createSignedUrl(storagePath, 3600);
+      setLoadingAudioId(null);
+      if (data?.signedUrl) {
+        url = data.signedUrl;
+        setAudioUrls((prev) => ({ ...prev, [id]: url }));
+      }
+    }
+    if (url) {
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.play();
+      setPlayingId(id);
+      audio.onended = () => setPlayingId(null);
+      audio.onerror = () => setPlayingId(null);
+    }
   };
 
   const emailFor = (userId: string | null) => {
@@ -484,28 +525,70 @@ export default function AdminPage() {
                       {filteredDataset.length === 0 ? (
                         <EmptyState icon={Database} text="No dataset items found" />
                       ) : (
-                        filteredDataset.map((d) => (
-                          <div key={d.id} className="px-4 sm:px-6 py-3.5 hover:bg-stone-50 transition-colors">
-                            <div className="flex items-start justify-between gap-3 mb-1">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <FileAudio size={12} className="text-emerald-500 flex-shrink-0" />
-                                <span className="text-xs text-stone-500 truncate">{d.filename}</span>
-                                <span className="text-xs text-stone-300">·</span>
-                                <span className="text-xs text-stone-400 capitalize">{d.language ?? "—"}</span>
-                                <span className="text-xs text-stone-300">·</span>
-                                <span className="text-xs text-stone-400">{fmtSize(d.file_size_bytes)}</span>
+                        filteredDataset.map((d) => {
+                          const hasAudio = !!d.storage_path;
+                          const isPlaying = playingId === d.id;
+                          const isLoadingAudio = loadingAudioId === d.id;
+                          return (
+                            <div key={d.id} className="px-4 sm:px-6 py-3.5 hover:bg-stone-50 transition-colors">
+                              <div className="flex items-start gap-3">
+                                {/* Play button */}
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {hasAudio ? (
+                                    <button
+                                      onClick={() => handlePlayAudio(d.id, d.storage_path)}
+                                      disabled={isLoadingAudio}
+                                      title={isPlaying ? "Pause" : "Play recording"}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm border ${
+                                        isPlaying
+                                          ? "bg-emerald-500 hover:bg-emerald-600 border-emerald-400 text-white"
+                                          : isLoadingAudio
+                                          ? "bg-stone-100 border-stone-200 text-stone-400"
+                                          : "bg-white hover:bg-emerald-50 border-stone-200 hover:border-emerald-300 text-stone-500 hover:text-emerald-600"
+                                      }`}
+                                    >
+                                      {isLoadingAudio ? (
+                                        <Loader2 size={13} className="animate-spin" />
+                                      ) : isPlaying ? (
+                                        <Pause size={13} />
+                                      ) : (
+                                        <Play size={13} className="translate-x-0.5" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <div
+                                      className="w-8 h-8 rounded-full flex items-center justify-center bg-stone-50 border border-stone-100 text-stone-300"
+                                      title="No audio file"
+                                    >
+                                      <Volume2 size={12} />
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-3 mb-1">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <FileAudio size={12} className="text-emerald-500 flex-shrink-0" />
+                                      <span className="text-xs text-stone-500 truncate">{d.filename}</span>
+                                      <span className="text-xs text-stone-300">·</span>
+                                      <span className="text-xs text-stone-400 capitalize">{d.language ?? "—"}</span>
+                                      <span className="text-xs text-stone-300">·</span>
+                                      <span className="text-xs text-stone-400">{fmtSize(d.file_size_bytes)}</span>
+                                    </div>
+                                    <p className="text-xs text-stone-400 flex-shrink-0 hidden sm:block">{fmtDate(d.created_at)}</p>
+                                  </div>
+                                  <p className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
+                                    {stripDiacritics(d.transcription ?? "")}
+                                  </p>
+                                  <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
+                                    <Users size={10} />
+                                    {emailFor(d.user_id)}
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-xs text-stone-400 flex-shrink-0 hidden sm:block">{fmtDate(d.created_at)}</p>
                             </div>
-                            <p className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
-                              {stripDiacritics(d.transcription ?? "")}
-                            </p>
-                            <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
-                              <Users size={10} />
-                              {emailFor(d.user_id)}
-                            </p>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}

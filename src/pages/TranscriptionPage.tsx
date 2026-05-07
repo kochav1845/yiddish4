@@ -265,6 +265,23 @@ export default function TranscriptionPage() {
     );
   };
 
+  const handleAddHistoryItemToDataset = async (
+    _id: string,
+    transcription: string,
+    language: string,
+    filename: string
+  ) => {
+    if (!user) throw new Error("Not logged in");
+    const { error } = await supabase.from("dataset_items").insert({
+      user_id: user.id,
+      filename,
+      storage_path: "",
+      transcription,
+      language,
+    });
+    if (error) throw new Error("Failed to save to dataset. Please try again.");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 to-stone-100/50">
       <AppHeader />
@@ -342,7 +359,12 @@ export default function TranscriptionPage() {
           </div>
         )}
 
-        <TranscriptionHistory items={history} onDelete={handleDelete} onEdited={handleEdited} />
+        <TranscriptionHistory
+          items={history}
+          onDelete={handleDelete}
+          onEdited={handleEdited}
+          onAddToDataset={user ? handleAddHistoryItemToDataset : undefined}
+        />
       </main>
 
       <footer className="text-center text-stone-400 text-xs py-6 sm:py-8 font-hebrew">
