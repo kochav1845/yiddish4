@@ -42,6 +42,7 @@ RUN pip install --no-cache-dir \
     PyYAML \
     scikit-learn \
     numba \
+    pypinyin \
     runpod
 
 COPY runpod/tts_server.py /app/tts_server.py
