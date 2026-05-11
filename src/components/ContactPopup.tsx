@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Mail, MessageSquare } from "lucide-react";
 
 const CHECK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-visitor`;
-const CONTACT_EMAIL = "heimischgerett@star-dev.dev";
+const CONTACT_EMAIL = "heimischgerett@stardev.dev";
 
 export default function ContactPopup() {
   const [visible, setVisible] = useState(false);

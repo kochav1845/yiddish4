@@ -304,7 +304,7 @@ export default function TranscriptionPage() {
             <p className="text-sm text-stone-400 mt-1.5">
               Interested in sponsoring this project?{" "}
               <a
-                href="mailto:heimischgerett@star-dev.dev"
+                href="mailto:heimischgerett@stardev.dev"
                 className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors font-medium"
               >
                 Get in touch
