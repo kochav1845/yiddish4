@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Volume2, Loader2, Play, Pause, RotateCcw, User, Database, CheckCircle2, Construction } from "lucide-react";
 import AppHeader from "../components/AppHeader";
-import { supabase } from "../lib/supabase";
+import { supabase, ADMIN_EMAIL } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
 const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
@@ -22,6 +22,7 @@ const EXAMPLE_TEXTS = [
 
 export default function SpeakPage() {
   const { user } = useAuth();
+  const isAdmin = user?.email === ADMIN_EMAIL;
   const [text, setText] = useState("");
   const [speakerId, setSpeakerId] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -158,20 +159,24 @@ export default function SpeakPage() {
         </div>
 
         {/* Under construction banner */}
-        <div className="flex items-start gap-3.5 bg-amber-50 border border-amber-200 rounded-2xl px-4 sm:px-5 py-4">
-          <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <Construction size={15} className="text-amber-600" />
+        <div className={`flex items-start gap-3.5 rounded-2xl px-4 sm:px-5 py-4 border ${isAdmin ? "bg-stone-800 border-stone-700" : "bg-amber-50 border-amber-200"}`}>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${isAdmin ? "bg-stone-700" : "bg-amber-100"}`}>
+            <Construction size={15} className={isAdmin ? "text-stone-300" : "text-amber-600"} />
           </div>
           <div>
-            <p className="text-sm font-bold text-amber-900">Text-to-speech is not available yet</p>
-            <p className="text-sm text-amber-700 leading-relaxed mt-0.5">
-              The REYD voice system is currently being set up. This feature will be enabled once the model server is running. Check back soon.
+            <p className={`text-sm font-bold ${isAdmin ? "text-white" : "text-amber-900"}`}>
+              {isAdmin ? "Admin mode — TTS access enabled" : "Text-to-speech is not available yet"}
+            </p>
+            <p className={`text-sm leading-relaxed mt-0.5 ${isAdmin ? "text-stone-300" : "text-amber-700"}`}>
+              {isAdmin
+                ? "The REYD model server may or may not be running. You can test it here while it is unavailable to regular users."
+                : "The REYD voice system is currently being set up. This feature will be enabled once the model server is running. Check back soon."}
             </p>
           </div>
         </div>
 
         {/* Main card */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-4 sm:p-6 space-y-5 opacity-60 pointer-events-none select-none">
+        <div className={`bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-4 sm:p-6 space-y-5 ${!isAdmin ? "opacity-60 pointer-events-none select-none" : ""}`}>
 
           {/* Speaker selector */}
           <div>

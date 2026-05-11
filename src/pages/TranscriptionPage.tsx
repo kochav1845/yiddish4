@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { AlertTriangle } from "lucide-react";
 import { stripDiacritics } from "../lib/textUtils";
 import AudioInput from "../components/AudioInput";
 import TranscriptionResult from "../components/TranscriptionResult";
@@ -287,6 +288,32 @@ export default function TranscriptionPage() {
       <AppHeader />
 
       <main className="max-w-3xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
+
+        {/* Service disclaimer */}
+        <div className="flex items-start gap-3 bg-stone-800 border border-stone-700 rounded-2xl px-4 sm:px-5 py-4 mb-5 sm:mb-6">
+          <div className="w-7 h-7 rounded-lg bg-stone-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <AlertTriangle size={13} className="text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-white">
+              This service may be slow or temporarily unavailable
+            </p>
+            <p className="text-sm text-stone-300 leading-relaxed mt-1">
+              Due to limited funds, the transcription server shuts down automatically after 30 minutes of inactivity and needs to be manually restarted. If your upload stalls, please try again later.
+            </p>
+            <p className="text-sm text-stone-400 mt-1.5">
+              Interested in sponsoring this project?{" "}
+              <a
+                href="mailto:heimischgerett@star-dev.dev"
+                className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors font-medium"
+              >
+                Get in touch
+              </a>
+              {" "}and help keep it running.
+            </p>
+          </div>
+        </div>
+
         <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/20 p-4 sm:p-6 md:p-8 mb-6 sm:mb-8">
           <EditableText
             contentKey="main_heading"
