@@ -15,6 +15,7 @@ import {
   Play,
   Pause,
   Volume2,
+  Save,
 } from "lucide-react";
 import AppHeader from "../components/AppHeader";
 import { supabase, type Profile, type Transcription, type DatasetItem } from "../lib/supabase";
@@ -102,6 +103,8 @@ export default function AdminPage() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
 
   // Audio playback
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -111,10 +114,11 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [profilesRes, transcriptionsRes, datasetRes] = await Promise.all([
+    const [profilesRes, transcriptionsRes, datasetRes, draftRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("transcriptions").select("*").order("created_at", { ascending: false }).limit(500),
       supabase.from("dataset_items").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("site_content").select("content_key, content_value").in("content_key", ["email_draft_subject", "email_draft_body"]),
     ]);
     const p = (profilesRes.data ?? []) as Profile[];
     const t = (transcriptionsRes.data ?? []) as Transcription[];
@@ -123,6 +127,14 @@ export default function AdminPage() {
     setTranscriptions(t);
     setDatasetItems(d);
     setStats({ users: p.length, transcriptions: t.length, datasetItems: d.length });
+
+    if (draftRes.data) {
+      const map: Record<string, string> = {};
+      draftRes.data.forEach((row) => { map[row.content_key] = row.content_value; });
+      if (map["email_draft_subject"]) setEmailSubject(map["email_draft_subject"]);
+      if (map["email_draft_body"]) setEmailBody(map["email_draft_body"]);
+    }
+
     setLoading(false);
   }, []);
 
@@ -237,6 +249,21 @@ export default function AdminPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSaveDraft = async () => {
+    setSavingDraft(true);
+    setDraftSaved(false);
+    await supabase.from("site_content").upsert(
+      [
+        { content_key: "email_draft_subject", content_value: emailSubject, updated_at: new Date().toISOString() },
+        { content_key: "email_draft_body", content_value: emailBody, updated_at: new Date().toISOString() },
+      ],
+      { onConflict: "content_key" }
+    );
+    setSavingDraft(false);
+    setDraftSaved(true);
+    setTimeout(() => setDraftSaved(false), 3000);
   };
 
   const statCards = [
@@ -430,8 +457,8 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Send button */}
-              <div className="flex items-center gap-4 pt-1">
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-1 flex-wrap">
                 <button
                   onClick={handleSendEmail}
                   disabled={
@@ -445,10 +472,27 @@ export default function AdminPage() {
                   {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   {sending ? "Sending…" : `Send Email${recipientMode === "all" ? " to All" : selectedUserIds.size > 0 ? ` to ${selectedUserIds.size}` : ""}`}
                 </button>
+
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={savingDraft}
+                  className="flex items-center gap-2 bg-white hover:bg-stone-50 border border-stone-200 hover:border-stone-300 text-stone-700 font-semibold text-sm px-5 py-3 rounded-xl transition-all"
+                >
+                  {savingDraft ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  {savingDraft ? "Saving…" : "Save Draft"}
+                </button>
+
+                {draftSaved && (
+                  <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                    <CheckCircle2 size={15} />
+                    Draft saved
+                  </span>
+                )}
+
                 {sendResult && (
                   <button
                     onClick={() => setSendResult(null)}
-                    className="text-sm text-stone-400 hover:text-stone-600 transition-colors"
+                    className="text-sm text-stone-400 hover:text-stone-600 transition-colors ml-auto"
                   >
                     Send another
                   </button>
