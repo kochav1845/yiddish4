@@ -146,6 +146,32 @@ async function handleSubmit(req: Request): Promise<Response> {
   }
 }
 
+async function handleHealthCheck(): Promise<Response> {
+  const runpodUrl = "https://api.runpod.ai/v2/c5y5e4hr3v3496";
+  const runpodApiKey = Deno.env.get("RUNPOD_API_KEY");
+  if (!runpodApiKey) return jsonRes({ status: "unknown", error: "RunPod not configured" });
+
+  try {
+    const res = await fetch(`${runpodUrl}/health`, {
+      headers: { "Authorization": `Bearer ${runpodApiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return jsonRes({ status: "offline" });
+
+    const data = await res.json();
+    const workers = data?.workers ?? {};
+    const ready: number = workers.ready ?? 0;
+    const running: number = workers.running ?? 0;
+    const initializing: number = workers.initializing ?? 0;
+
+    const status = (ready > 0 || running > 0) ? "online" : "cold";
+    return jsonRes({ status, readyWorkers: ready, runningWorkers: running, initializingWorkers: initializing });
+  } catch {
+    return jsonRes({ status: "offline" });
+  }
+}
+
 async function handleStatusCheck(jobId: string): Promise<Response> {
   const runpodUrl = "https://api.runpod.ai/v2/c5y5e4hr3v3496";
   const runpodApiKey = Deno.env.get("RUNPOD_API_KEY");
@@ -278,6 +304,8 @@ Deno.serve(async (req: Request) => {
     if (req.method === "GET") {
       const url = new URL(req.url);
       const jobId = url.searchParams.get("jobId");
+      const health = url.searchParams.get("health");
+      if (health !== null) return await handleHealthCheck();
       if (!jobId) return jsonRes({ error: "Missing jobId parameter" }, 400);
       return await handleStatusCheck(jobId);
     }

@@ -1,5 +1,7 @@
 const RUNPOD_URL = (import.meta.env.VITE_RUNPOD_URL as string | undefined) || "https://api.runpod.ai/v2/c5y5e4hr3v3496";
 const RUNPOD_API_KEY = import.meta.env.VITE_RUNPOD_API_KEY as string | undefined;
+const EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export function isDirectRunPodConfigured(): boolean {
   return Boolean(RUNPOD_API_KEY);
@@ -16,36 +18,20 @@ export interface WorkerHealth {
 
 export async function checkWorkerHealth(): Promise<WorkerHealth> {
   try {
-    const headers: Record<string, string> = {};
-    if (RUNPOD_API_KEY) headers["Authorization"] = `Bearer ${RUNPOD_API_KEY}`;
-
-    const res = await fetch(`${RUNPOD_URL}/health`, {
-      headers,
-      signal: AbortSignal.timeout(8000),
+    const res = await fetch(`${EDGE_URL}?health`, {
+      headers: { "Authorization": `Bearer ${ANON_KEY}` },
+      signal: AbortSignal.timeout(10000),
     });
-
-    if (res.status === 401) {
-      return { status: "unknown", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 };
-    }
 
     if (!res.ok) {
       return { status: "offline", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 };
     }
 
     const data = await res.json();
-    const workers = data?.workers ?? {};
-    const ready: number = workers.ready ?? 0;
-    const running: number = workers.running ?? 0;
-    const initializing: number = workers.initializing ?? 0;
-
-    let status: WorkerStatus;
-    if (ready > 0 || running > 0) {
-      status = "online";
-    } else if (initializing > 0) {
-      status = "cold";
-    } else {
-      status = "cold";
-    }
+    const status: WorkerStatus = data?.status ?? "unknown";
+    const ready: number = data?.readyWorkers ?? 0;
+    const running: number = data?.runningWorkers ?? 0;
+    const initializing: number = data?.initializingWorkers ?? 0;
 
     return { status, readyWorkers: ready, runningWorkers: running, initializingWorkers: initializing };
   } catch {
