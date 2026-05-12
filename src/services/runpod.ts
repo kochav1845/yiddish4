@@ -1,8 +1,8 @@
-const RUNPOD_URL = import.meta.env.VITE_RUNPOD_URL as string | undefined;
+const RUNPOD_URL = (import.meta.env.VITE_RUNPOD_URL as string | undefined) || "https://api.runpod.ai/v2/c5y5e4hr3v3496";
 const RUNPOD_API_KEY = import.meta.env.VITE_RUNPOD_API_KEY as string | undefined;
 
 export function isDirectRunPodConfigured(): boolean {
-  return Boolean(RUNPOD_URL && RUNPOD_API_KEY);
+  return Boolean(RUNPOD_API_KEY);
 }
 
 export type WorkerStatus = "checking" | "online" | "cold" | "offline" | "unknown";
@@ -15,15 +15,18 @@ export interface WorkerHealth {
 }
 
 export async function checkWorkerHealth(): Promise<WorkerHealth> {
-  if (!RUNPOD_URL || !RUNPOD_API_KEY) {
-    return { status: "unknown", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 };
-  }
-
   try {
+    const headers: Record<string, string> = {};
+    if (RUNPOD_API_KEY) headers["Authorization"] = `Bearer ${RUNPOD_API_KEY}`;
+
     const res = await fetch(`${RUNPOD_URL}/health`, {
-      headers: { "Authorization": `Bearer ${RUNPOD_API_KEY}` },
+      headers,
       signal: AbortSignal.timeout(8000),
     });
+
+    if (res.status === 401) {
+      return { status: "unknown", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 };
+    }
 
     if (!res.ok) {
       return { status: "offline", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 };

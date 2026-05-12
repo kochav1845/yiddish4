@@ -49,10 +49,6 @@ export default function TranscriptionPage() {
   const healthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshHealth = useCallback(async () => {
-    if (!isDirectRunPodConfigured()) {
-      setWorkerHealth({ status: "unknown", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 });
-      return;
-    }
     setHealthChecking(true);
     const health = await checkWorkerHealth();
     setWorkerHealth(health);
