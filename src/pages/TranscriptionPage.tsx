@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { AlertTriangle } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import { stripDiacritics } from "../lib/textUtils";
 import AudioInput from "../components/AudioInput";
 import TranscriptionResult from "../components/TranscriptionResult";
@@ -16,6 +16,8 @@ import {
   isDirectRunPodConfigured,
   submitDirectToRunPod,
   pollDirectRunPodStatus,
+  checkWorkerHealth,
+  type WorkerHealth,
 } from "../services/runpod";
 
 const EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe`;
@@ -37,6 +39,33 @@ export default function TranscriptionPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<Transcription[]>([]);
+  const [workerHealth, setWorkerHealth] = useState<WorkerHealth>({
+    status: "checking",
+    readyWorkers: 0,
+    runningWorkers: 0,
+    initializingWorkers: 0,
+  });
+  const [healthChecking, setHealthChecking] = useState(false);
+  const healthIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refreshHealth = useCallback(async () => {
+    if (!isDirectRunPodConfigured()) {
+      setWorkerHealth({ status: "unknown", readyWorkers: 0, runningWorkers: 0, initializingWorkers: 0 });
+      return;
+    }
+    setHealthChecking(true);
+    const health = await checkWorkerHealth();
+    setWorkerHealth(health);
+    setHealthChecking(false);
+  }, []);
+
+  useEffect(() => {
+    refreshHealth();
+    healthIntervalRef.current = setInterval(refreshHealth, 60_000);
+    return () => {
+      if (healthIntervalRef.current) clearInterval(healthIntervalRef.current);
+    };
+  }, [refreshHealth]);;
 
   const loadHistory = useCallback(async () => {
     const { data } = await supabase
@@ -289,28 +318,93 @@ export default function TranscriptionPage() {
 
       <main className="max-w-3xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
 
-        {/* Service disclaimer */}
-        <div className="flex items-start gap-3 bg-stone-800 border border-stone-700 rounded-2xl px-4 sm:px-5 py-4 mb-5 sm:mb-6">
-          <div className="w-7 h-7 rounded-lg bg-stone-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <AlertTriangle size={13} className="text-amber-400" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-white">
-              This service may be slow or temporarily unavailable
-            </p>
-            <p className="text-sm text-stone-300 leading-relaxed mt-1">
-              Due to limited funds, the transcription server shuts down automatically after 30 minutes of inactivity and needs to be manually restarted. If your upload stalls, please try again later.
-            </p>
-            <p className="text-sm text-stone-400 mt-1.5">
-              Interested in sponsoring this project?{" "}
-              <a
-                href="mailto:heimischgerett@stardev.dev"
-                className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors font-medium"
-              >
-                Get in touch
-              </a>
-              {" "}and help keep it running.
-            </p>
+        {/* Service status banner */}
+        <div className="bg-stone-800 border border-stone-700 rounded-2xl px-4 sm:px-5 py-4 mb-5 sm:mb-6">
+          <div className="flex items-start gap-3">
+            <div className="w-7 h-7 rounded-lg bg-stone-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertTriangle size={13} className="text-amber-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <p className="text-sm font-semibold text-white">
+                  Transcription Server Status
+                </p>
+                <div className="flex items-center gap-2">
+                  {/* Status pill */}
+                  {workerHealth.status === "checking" ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-700 text-stone-300 text-xs font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-pulse" />
+                      Checking...
+                    </span>
+                  ) : workerHealth.status === "online" ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-900/60 border border-emerald-700/50 text-emerald-300 text-xs font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      Online
+                    </span>
+                  ) : workerHealth.status === "cold" ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-900/40 border border-amber-700/40 text-amber-300 text-xs font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Cold / Starting
+                    </span>
+                  ) : workerHealth.status === "offline" ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-900/40 border border-red-700/40 text-red-300 text-xs font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                      Offline
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-700 text-stone-400 text-xs font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-stone-500" />
+                      Unknown
+                    </span>
+                  )}
+                  <button
+                    onClick={refreshHealth}
+                    disabled={healthChecking}
+                    className="p-1 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-700 transition-colors disabled:opacity-40"
+                    title="Refresh status"
+                  >
+                    <RefreshCw size={13} className={healthChecking ? "animate-spin" : ""} />
+                  </button>
+                </div>
+              </div>
+
+              {workerHealth.status === "online" && (
+                <p className="text-xs text-stone-400 mt-1.5 leading-relaxed">
+                  The transcription worker is active and ready to accept requests.
+                  {workerHealth.readyWorkers + workerHealth.runningWorkers > 0 && (
+                    <span className="text-stone-500">
+                      {" "}({workerHealth.readyWorkers} ready, {workerHealth.runningWorkers} running)
+                    </span>
+                  )}
+                </p>
+              )}
+              {workerHealth.status === "cold" && (
+                <p className="text-xs text-stone-400 mt-1.5 leading-relaxed">
+                  The worker is warming up. Your first request may take 1-2 minutes while it initializes.
+                </p>
+              )}
+              {workerHealth.status === "offline" && (
+                <p className="text-xs text-stone-400 mt-1.5 leading-relaxed">
+                  The transcription server appears to be offline. Due to limited funds, it shuts down after inactivity and may need to be restarted. Please try again later.
+                </p>
+              )}
+              {(workerHealth.status === "unknown" || workerHealth.status === "checking") && (
+                <p className="text-xs text-stone-400 mt-1.5 leading-relaxed">
+                  Due to limited funds, the transcription server shuts down automatically after 30 minutes of inactivity.
+                </p>
+              )}
+
+              <p className="text-xs text-stone-500 mt-2">
+                Interested in sponsoring this project?{" "}
+                <a
+                  href="mailto:heimischgerett@stardev.dev"
+                  className="text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors font-medium"
+                >
+                  Get in touch
+                </a>
+                {" "}and help keep it running.
+              </p>
+            </div>
           </div>
         </div>
 
