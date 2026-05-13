@@ -23,6 +23,7 @@ export interface Transcription {
   duration_seconds: number | null;
   file_size_bytes: number | null;
   storage_path: string | null;
+  raw_transcription: string | null;
   created_at: string;
 }
 

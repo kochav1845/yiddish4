@@ -131,6 +131,7 @@ export default function TranscriptionPage() {
 
   const saveResult = async (
     file: File,
+    rawText: string,
     transcriptionText: string,
     inLang: string,
     outLang: string
@@ -152,6 +153,7 @@ export default function TranscriptionPage() {
 
     const { error: dbError } = await supabase.from("transcriptions").insert({
       filename: file.name,
+      raw_transcription: rawText,
       transcription: transcriptionText,
       file_size_bytes: file.size,
       language: inLang,
@@ -283,7 +285,7 @@ export default function TranscriptionPage() {
         outputLang: outputLanguage,
       });
 
-      await saveResult(file, transcriptionText, inputLanguage, outputLanguage);
+      await saveResult(file, rawText, transcriptionText, inputLanguage, outputLanguage);
     } catch (err) {
       setError(
         err instanceof Error

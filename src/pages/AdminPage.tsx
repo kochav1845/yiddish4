@@ -689,15 +689,35 @@ export default function AdminPage() {
 
                                   {/* Transcription text or edit textarea */}
                                   {isExpanded ? (
-                                    <div className="mt-2 space-y-2">
-                                      <textarea
-                                        value={editDrafts[t.id] ?? ""}
-                                        onChange={(e) => setEditDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                                        dir="auto"
-                                        rows={4}
-                                        lang="yi"
-                                        className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2.5 text-sm text-stone-800 font-hebrew leading-relaxed resize-y focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all"
-                                      />
+                                    <div className="mt-2 space-y-3">
+                                      {/* Raw Whisper output — read-only */}
+                                      {t.raw_transcription ? (
+                                        <div>
+                                          <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1">Raw Whisper Output</p>
+                                          <div
+                                            dir="auto"
+                                            className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-sm text-stone-500 font-hebrew leading-relaxed select-all"
+                                          >
+                                            {stripDiacritics(t.raw_transcription)}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-stone-400 italic">No raw output saved (transcribed before this feature was added)</p>
+                                      )}
+
+                                      {/* AI-corrected — editable */}
+                                      <div>
+                                        <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1">AI-Corrected Transcription</p>
+                                        <textarea
+                                          value={editDrafts[t.id] ?? ""}
+                                          onChange={(e) => setEditDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                                          dir="auto"
+                                          rows={4}
+                                          lang="yi"
+                                          className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2.5 text-sm text-stone-800 font-hebrew leading-relaxed resize-y focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all"
+                                        />
+                                      </div>{/* end AI-corrected */}
+
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <button
                                           onClick={() => handleSaveEdit(t)}
