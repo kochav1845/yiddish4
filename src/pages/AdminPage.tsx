@@ -16,6 +16,9 @@ import {
   Pause,
   Volume2,
   Save,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import AppHeader from "../components/AppHeader";
 import { supabase, type Profile, type Transcription, type DatasetItem } from "../lib/supabase";
@@ -86,7 +89,7 @@ interface Stats {
 type Tab = "users" | "transcriptions" | "dataset" | "email";
 
 export default function AdminPage() {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
   const [datasetItems, setDatasetItems] = useState<DatasetItem[]>([]);
@@ -112,6 +115,13 @@ export default function AdminPage() {
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
 
+  // Inline edit state for transcriptions
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
+  const [savingEditId, setSavingEditId] = useState<string | null>(null);
+  const [editSavedId, setEditSavedId] = useState<string | null>(null);
+  const [addingDatasetId, setAddingDatasetId] = useState<string | null>(null);
+  const [addedToDatasetIds, setAddedToDatasetIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,6 +193,75 @@ export default function AdminPage() {
       setPlayingId(id);
       audio.onended = () => setPlayingId(null);
       audio.onerror = () => setPlayingId(null);
+    }
+  };
+
+  const handleToggleExpand = (id: string, currentText: string) => {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setEditDrafts((prev) => ({ ...prev, [id]: stripDiacritics(currentText ?? "") }));
+    setExpandedId(id);
+  };
+
+  const handleSaveEdit = async (t: Transcription) => {
+    const draft = editDrafts[t.id]?.trim();
+    if (!draft) return;
+    setSavingEditId(t.id);
+    const { error } = await supabase
+      .from("transcriptions")
+      .update({ transcription: draft })
+      .eq("id", t.id);
+    setSavingEditId(null);
+    if (!error) {
+      setTranscriptions((prev) =>
+        prev.map((item) => (item.id === t.id ? { ...item, transcription: draft } : item))
+      );
+      setEditSavedId(t.id);
+      setTimeout(() => setEditSavedId(null), 2000);
+    }
+  };
+
+  const handleAdminAddToDataset = async (t: Transcription) => {
+    const text = (editDrafts[t.id] ?? t.transcription)?.trim();
+    if (!text) return;
+    setAddingDatasetId(t.id);
+
+    let storagePath = "";
+    if (t.storage_path) {
+      try {
+        const { data: urlData } = await supabase.storage
+          .from("transcription-audio")
+          .createSignedUrl(t.storage_path, 120);
+        if (urlData?.signedUrl) {
+          const res = await fetch(urlData.signedUrl);
+          const blob = await res.blob();
+          const ext = t.storage_path.split(".").pop() ?? "webm";
+          const destPath = `admin/${crypto.randomUUID()}.${ext}`;
+          const { error: upErr } = await supabase.storage
+            .from("dataset-audio")
+            .upload(destPath, blob, { contentType: blob.type || "audio/webm" });
+          if (!upErr) storagePath = destPath;
+        }
+      } catch {
+        // proceed without audio if copy fails
+      }
+    }
+
+    const { error } = await supabase.from("dataset_items").insert({
+      user_id: t.user_id ?? user?.id,
+      filename: t.filename,
+      storage_path: storagePath,
+      transcription: text,
+      language: t.output_language || t.language || "yiddish",
+      file_size_bytes: t.file_size_bytes,
+    });
+
+    setAddingDatasetId(null);
+    if (!error) {
+      setAddedToDatasetIds((prev) => new Set(prev).add(t.id));
+      setStats((prev) => ({ ...prev, datasetItems: prev.datasetItems + 1 }));
     }
   };
 
@@ -543,9 +622,15 @@ export default function AdminPage() {
                           const hasAudio = !!t.storage_path;
                           const isPlaying = playingId === t.id;
                           const isLoadingAudio = loadingAudioId === t.id;
+                          const isExpanded = expandedId === t.id;
+                          const isSavingEdit = savingEditId === t.id;
+                          const isEditSaved = editSavedId === t.id;
+                          const isAddingDataset = addingDatasetId === t.id;
+                          const isAddedToDataset = addedToDatasetIds.has(t.id);
                           return (
-                            <div key={t.id} className="px-4 sm:px-6 py-3.5 hover:bg-stone-50 transition-colors">
+                            <div key={t.id} className={`px-4 sm:px-6 py-3.5 transition-colors ${isExpanded ? "bg-amber-50/40" : "hover:bg-stone-50"}`}>
                               <div className="flex items-start gap-3">
+                                {/* Play button */}
                                 <div className="flex-shrink-0 mt-0.5">
                                   {hasAudio ? (
                                     <button
@@ -569,16 +654,15 @@ export default function AdminPage() {
                                       )}
                                     </button>
                                   ) : (
-                                    <div
-                                      className="w-8 h-8 rounded-full flex items-center justify-center bg-stone-50 border border-stone-100 text-stone-300"
-                                      title="No recording saved"
-                                    >
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-stone-50 border border-stone-100 text-stone-300" title="No recording saved">
                                       <Volume2 size={12} />
                                     </div>
                                   )}
                                 </div>
+
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between gap-3 mb-1">
+                                  {/* Header row */}
+                                  <div className="flex items-start justify-between gap-2 mb-1">
                                     <div className="flex items-center gap-2 min-w-0">
                                       <FileAudio size={12} className="text-amber-500 flex-shrink-0" />
                                       <span className="text-xs text-stone-500 truncate">{t.filename}</span>
@@ -587,12 +671,84 @@ export default function AdminPage() {
                                       <span className="text-xs text-stone-300">·</span>
                                       <span className="text-xs text-stone-400">{fmtSize(t.file_size_bytes)}</span>
                                     </div>
-                                    <p className="text-xs text-stone-400 flex-shrink-0 hidden sm:block">{fmtDate(t.created_at)}</p>
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      <span className="text-xs text-stone-400 hidden sm:block">{fmtDate(t.created_at)}</span>
+                                      <button
+                                        onClick={() => handleToggleExpand(t.id, t.transcription)}
+                                        title={isExpanded ? "Close" : "Edit transcription"}
+                                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                                          isExpanded
+                                            ? "bg-stone-200 text-stone-600 hover:bg-stone-300"
+                                            : "text-stone-400 hover:text-amber-600 hover:bg-amber-50"
+                                        }`}
+                                      >
+                                        {isExpanded ? <X size={13} /> : <Pencil size={13} />}
+                                      </button>
+                                    </div>
                                   </div>
-                                  <p className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
-                                    {stripDiacritics(t.transcription ?? "")}
-                                  </p>
-                                  <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
+
+                                  {/* Transcription text or edit textarea */}
+                                  {isExpanded ? (
+                                    <div className="mt-2 space-y-2">
+                                      <textarea
+                                        value={editDrafts[t.id] ?? ""}
+                                        onChange={(e) => setEditDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                                        dir="auto"
+                                        rows={4}
+                                        lang="yi"
+                                        className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2.5 text-sm text-stone-800 font-hebrew leading-relaxed resize-y focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 transition-all"
+                                      />
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <button
+                                          onClick={() => handleSaveEdit(t)}
+                                          disabled={isSavingEdit || !editDrafts[t.id]?.trim()}
+                                          className="flex items-center gap-1.5 bg-stone-800 hover:bg-stone-900 disabled:bg-stone-200 disabled:text-stone-400 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all"
+                                        >
+                                          {isSavingEdit ? (
+                                            <Loader2 size={12} className="animate-spin" />
+                                          ) : isEditSaved ? (
+                                            <Check size={12} />
+                                          ) : (
+                                            <Save size={12} />
+                                          )}
+                                          {isSavingEdit ? "Saving…" : isEditSaved ? "Saved!" : "Save Changes"}
+                                        </button>
+
+                                        {isAddedToDataset ? (
+                                          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-lg">
+                                            <CheckCircle2 size={12} />
+                                            Added to Dataset
+                                          </span>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleAdminAddToDataset(t)}
+                                            disabled={isAddingDataset}
+                                            className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-stone-200 disabled:to-stone-200 disabled:text-stone-400 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-all shadow-sm"
+                                          >
+                                            {isAddingDataset ? (
+                                              <Loader2 size={12} className="animate-spin" />
+                                            ) : (
+                                              <Database size={12} />
+                                            )}
+                                            {isAddingDataset ? "Adding…" : "Add to Dataset"}
+                                          </button>
+                                        )}
+
+                                        <button
+                                          onClick={() => setExpandedId(null)}
+                                          className="text-xs text-stone-400 hover:text-stone-600 transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
+                                      {stripDiacritics(t.transcription ?? "")}
+                                    </p>
+                                  )}
+
+                                  <p className="text-xs text-stone-400 mt-1.5 flex items-center gap-1">
                                     <Users size={10} />
                                     {emailFor(t.user_id)}
                                   </p>
