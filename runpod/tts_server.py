@@ -53,7 +53,7 @@ MODEL_DIR = os.environ.get(
 )
 PREPROCESSED_DIR = os.environ.get(
     "PREPROCESSED_DIR",
-    os.path.join(REPO_DIR, "preprocessed_data", CONFIG),
+    os.path.join(REPO_DIR, "preprocessed_data", f"yiddish_textgrids_{CONFIG}"),
 )
 VOLUME_CKPT_DIR   = f"/runpod-volume/ckpt/{CONFIG}"
 VOLUME_PREP_DIR   = f"/runpod-volume/preprocessed/{CONFIG}"
