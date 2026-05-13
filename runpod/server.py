@@ -5,7 +5,7 @@ import tempfile
 import traceback
 import runpod
 
-MODEL_ID = "ivrit-ai/yi-whisper-large-v3"
+MODEL_ID = "yosefstern/yiddishstt"
 
 _pipe = None
 _device = None

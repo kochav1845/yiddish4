@@ -7,7 +7,7 @@ token = os.environ.get("HF_TOKEN", "")
 if token:
     login(token=token)
 
-model_id = "ivrit-ai/yi-whisper-large-v3"
+model_id = "yosefstern/yiddishstt"
 print(f"Downloading {model_id}...")
 AutoModelForSpeechSeq2Seq.from_pretrained(
     model_id,
