@@ -19,7 +19,6 @@ import argparse
 import os
 import random
 import shutil
-import subprocess
 import tempfile
 import urllib.request
 import zipfile
@@ -105,7 +104,10 @@ def collect_examples(extract_dir: Path) -> list[dict]:
 
 
 def resample_if_needed(wav_path: str) -> str:
-    """Return path to a 16 kHz mono WAV, resampling via ffmpeg if needed."""
+    """Return path to a 16 kHz mono WAV, resampling via librosa if needed."""
+    import numpy as np
+    import librosa
+
     info = sf.info(wav_path)
     if info.samplerate == SAMPLE_RATE and info.channels == 1:
         return wav_path
@@ -114,10 +116,8 @@ def resample_if_needed(wav_path: str) -> str:
     out_dir.mkdir(exist_ok=True)
     out_path = str(out_dir / Path(wav_path).name)
 
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", wav_path, "-ar", str(SAMPLE_RATE), "-ac", "1", out_path],
-        check=True, capture_output=True,
-    )
+    audio, _ = librosa.load(wav_path, sr=SAMPLE_RATE, mono=True)
+    sf.write(out_path, audio, SAMPLE_RATE)
     return out_path
 
 
