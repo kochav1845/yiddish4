@@ -417,7 +417,8 @@ def synthesize_text(text: str, speaker_id: int = 0) -> bytes:
     before = set(glob.glob(os.path.join(result_dir, "**", "*.wav"), recursive=True))
 
     cmd = [
-        "python", "synthesize.py",
+        "python", "-W", "ignore::FutureWarning", "-W", "ignore::UserWarning",
+        "synthesize.py",
         "--text", text,
         "--speaker_id", str(speaker_id),
         "--restore_step", str(step),
@@ -428,8 +429,8 @@ def synthesize_text(text: str, speaker_id: int = 0) -> bytes:
     ]
     proc = subprocess.run(cmd, cwd=REPO_DIR, capture_output=True, timeout=120)
     if proc.returncode != 0:
-        stderr = proc.stderr.decode(errors="replace")[:800]
-        stdout = proc.stdout.decode(errors="replace")[:400]
+        stderr = proc.stderr.decode(errors="replace")[-3000:]
+        stdout = proc.stdout.decode(errors="replace")[-1000:]
         raise RuntimeError(
             f"synthesize.py exit {proc.returncode}\nstderr: {stderr}\nstdout: {stdout}"
         )
