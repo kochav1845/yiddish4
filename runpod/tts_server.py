@@ -51,10 +51,26 @@ MODEL_DIR = os.environ.get(
     "MODEL_DIR",
     os.path.join(REPO_DIR, "output", "ckpt", CONFIG),
 )
-PREPROCESSED_DIR = os.environ.get(
-    "PREPROCESSED_DIR",
-    os.path.join(REPO_DIR, "preprocessed_data", f"yiddish_textgrids_{CONFIG}"),
-)
+
+def _detect_preprocessed_dir() -> str:
+    """Read preprocessed_path directly from the FastSpeech2 preprocess.yaml config."""
+    if os.environ.get("PREPROCESSED_DIR"):
+        return os.environ["PREPROCESSED_DIR"]
+    config_file = os.path.join(REPO_DIR, "config", CONFIG, "preprocess.yaml")
+    try:
+        import yaml
+        with open(config_file) as f:
+            cfg = yaml.safe_load(f)
+        rel = cfg["path"]["preprocessed_path"]
+        path = rel if os.path.isabs(rel) else os.path.join(REPO_DIR, rel)
+        print(f"[TTS] Config preprocessed_path → {path}")
+        return path
+    except Exception as exc:
+        fallback = os.path.join(REPO_DIR, "preprocessed_data", f"yiddish_textgrids_{CONFIG}")
+        print(f"[TTS] Warning reading config preprocessed_path ({exc}), fallback: {fallback}")
+        return fallback
+
+PREPROCESSED_DIR  = _detect_preprocessed_dir()
 VOLUME_CKPT_DIR   = f"/runpod-volume/ckpt/{CONFIG}"
 VOLUME_PREP_DIR   = f"/runpod-volume/preprocessed/{CONFIG}"
 FIGSHARE_API_URL  = "https://api.figshare.com/v2/articles/19350539/files"
