@@ -2,13 +2,16 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const RUNPOD_BASE = "https://api.runpod.ai/v2/5e4qz9p7usxg5e";
-const POLL_INTERVAL_MS = 2000;
-const MAX_WAIT_MS = 120_000;
+function jsonRes(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -16,13 +19,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const RUNPOD_API_KEY = Deno.env.get("RUNPOD_API_KEY");
+    const podUrl = Deno.env.get("TTS_POD_URL")?.replace(/\/$/, "");
 
-    if (!RUNPOD_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "TTS service not configured. RUNPOD_API_KEY missing." }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (!podUrl) {
+      return jsonRes({ error: "TTS service not configured. TTS_POD_URL secret is missing." }, 503);
+    }
+
+    const url = new URL(req.url);
+
+    // Health check — proxy to pod /health
+    if (req.method === "GET" && url.searchParams.has("health")) {
+      const res = await fetch(`${podUrl}/health`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await res.json();
+      return jsonRes(data, res.status);
+    }
+
+    if (req.method !== "POST") {
+      return jsonRes({ error: "Method not allowed" }, 405);
     }
 
     const body = await req.json();
@@ -30,94 +45,35 @@ Deno.serve(async (req: Request) => {
     const speakerId: number = Number(body.speaker_id ?? 0);
 
     if (!text) {
-      return new Response(
-        JSON.stringify({ error: "text is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonRes({ error: "text is required" }, 400);
     }
 
-    // Submit job to RunPod
-    const submitRes = await fetch(`${RUNPOD_BASE}/run`, {
+    // Call pod directly — single request, no polling
+    const res = await fetch(`${podUrl}/synthesize`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${RUNPOD_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ input: { text, speaker_id: speakerId } }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, speaker_id: speakerId }),
+      signal: AbortSignal.timeout(120_000),
     });
 
-    if (!submitRes.ok) {
-      const errText = await submitRes.text();
-      return new Response(
-        JSON.stringify({ error: `RunPod submit failed: ${errText}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[TTS] Pod error ${res.status}: ${errText.substring(0, 300)}`);
+      return jsonRes({ error: `TTS pod error ${res.status}: ${errText.substring(0, 200)}` }, 502);
     }
 
-    const submitData = await submitRes.json();
+    const data = await res.json();
 
-    // Synchronous response — RunPod returned audio immediately
-    if (submitData.output?.audio_b64) {
-      return new Response(
-        JSON.stringify({ audio_b64: submitData.output.audio_b64, format: "wav" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+    if (data.error) {
+      return jsonRes({ error: data.error }, 500);
     }
 
-    const jobId: string = submitData.id;
-    if (!jobId) {
-      return new Response(
-        JSON.stringify({ error: "No job ID returned from RunPod", detail: JSON.stringify(submitData) }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Poll for completion
-    const statusUrl = `${RUNPOD_BASE}/status/${jobId}`;
-    const started = Date.now();
-
-    while (Date.now() - started < MAX_WAIT_MS) {
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-
-      const statusRes = await fetch(statusUrl, {
-        headers: { Authorization: `Bearer ${RUNPOD_API_KEY}` },
-      });
-
-      if (!statusRes.ok) continue;
-
-      const statusData = await statusRes.json();
-
-      if (statusData.status === "COMPLETED") {
-        const audio_b64 = statusData.output?.audio_b64;
-        if (!audio_b64) {
-          return new Response(
-            JSON.stringify({ error: "Job completed but no audio returned" }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-        return new Response(
-          JSON.stringify({ audio_b64, format: "wav" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-
-      if (statusData.status === "FAILED" || statusData.status === "CANCELLED") {
-        return new Response(
-          JSON.stringify({ error: statusData.error ?? "TTS job failed" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-    }
-
-    return new Response(
-      JSON.stringify({ error: "TTS timed out after 2 minutes" }),
-      { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return jsonRes({ audio_b64: data.audio_b64, format: data.format ?? "wav" });
   } catch (err) {
-    console.error("TTS error:", err);
-    return new Response(
-      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    console.error("[TTS] Unhandled:", err);
+    return jsonRes(
+      { error: err instanceof Error ? err.message : "Unexpected error" },
+      500,
     );
   }
 });

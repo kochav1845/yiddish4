@@ -1,9 +1,7 @@
 # syntax=docker/dockerfile:1
-# REYD Yiddish TTS - RunPod Serverless Endpoint
-# Checkpoints are downloaded from Figshare on first container startup,
-# not at build time (Figshare blocks cloud build IPs).
-# Use a RunPod Network Volume mounted at /runpod-volume to persist checkpoints
-# across cold starts.
+# REYD Yiddish TTS — RunPod Pod (persistent HTTP server on port 8000)
+# Checkpoints are downloaded from Figshare on first startup if not already
+# present. Mount a RunPod Network Volume at /runpod-volume to persist them.
 
 FROM ubuntu:22.04
 
@@ -43,8 +41,12 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     numba \
     pypinyin \
-    runpod
+    fastapi \
+    uvicorn[standard] \
+    pydantic
 
 COPY runpod/tts_server.py /app/tts_server.py
+
+EXPOSE 8000
 
 CMD ["python", "/app/tts_server.py"]
