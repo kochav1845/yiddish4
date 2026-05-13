@@ -1,0 +1,30 @@
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+
+COPY runpod/finetune_requirements.txt .
+RUN pip install --no-cache-dir -r finetune_requirements.txt
+
+COPY runpod/prepare_reyd_finetune.py .
+COPY runpod/finetune_whisper.py .
+
+# Step 1 — prepare dataset (downloads corpus, converts to HF format)
+# docker run ... python prepare_reyd_finetune.py --output_dir /workspace/dataset
+
+# Step 2 — fine-tune
+# docker run ... python finetune_whisper.py \
+#   --dataset_dir /workspace/dataset \
+#   --output_dir  /workspace/model \
+#   --base_model  ivrit-ai/yi-whisper-large-v3 \
+#   --epochs 5
+
+CMD ["python", "-u", "finetune_whisper.py"]
