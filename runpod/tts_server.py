@@ -110,37 +110,63 @@ def _write_member(zf, entry, dest_dir, results, raw_bytes=None):
     results.append(dest)
 
 
-_PREP_EXTS = {".json", ".txt", ".npy", ".npz"}
+# Only .json and .txt are needed for inference; skip .npy/.npz (training data)
+_PREP_EXTS = {".json", ".txt"}
+
+
+def _extract_textgrid_zip(zip_source):
+    """Extract stats/preprocessed files from a textgrid zip to PREPROCESSED_DIR."""
+    os.makedirs(PREPROCESSED_DIR, exist_ok=True)
+    results = []
+    try:
+        if isinstance(zip_source, (bytes, bytearray)):
+            zf_ctx = zipfile.ZipFile(io.BytesIO(zip_source))
+        else:
+            zf_ctx = zipfile.ZipFile(zip_source)
+        with zf_ctx as zf:
+            entries = zf.namelist()
+            print(f"[TTS] Textgrid zip has {len(entries)} entries")
+            for entry in entries:
+                basename = os.path.basename(entry)
+                if not basename:
+                    continue
+                _, ext = os.path.splitext(basename.lower())
+                if ext in _PREP_EXTS:
+                    _write_member(zf, entry, PREPROCESSED_DIR, results)
+    except zipfile.BadZipFile as exc:
+        print(f"[TTS] Textgrid zip is not a valid zip: {exc}")
+    return results
+
+
+def _is_textgrid_for_config(name: str) -> bool:
+    n = name.lower().replace("-", "_")
+    return "textgrid" in n and CONFIG.lower().replace("-", "_") in n
 
 
 def _extract_zip(zip_path, dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
-    os.makedirs(PREPROCESSED_DIR, exist_ok=True)
     results = []
 
-    def _extract_entries(zf, entries):
+    def _extract_pth(zf, entries):
         direct_pth = [e for e in entries if e.endswith(".pth.tar")]
         config_pth = [e for e in direct_pth if CONFIG in e]
         for entry in (config_pth or direct_pth):
             _write_member(zf, entry, dest_dir, results)
 
-        for entry in entries:
-            basename = os.path.basename(entry)
-            if not basename:
-                continue
-            _, ext = os.path.splitext(basename.lower())
-            if ext in _PREP_EXTS:
-                _write_member(zf, entry, PREPROCESSED_DIR, results)
-
     with zipfile.ZipFile(zip_path) as outer:
         entries = outer.namelist()
         print(f"[TTS] Outer zip has {len(entries)} entries: {entries}")
-        _extract_entries(outer, entries)
+        _extract_pth(outer, entries)
         for nz in [e for e in entries if e.lower().endswith(".zip")]:
+            nz_basename = os.path.basename(nz)
             try:
                 nz_bytes = outer.read(nz)
-                with zipfile.ZipFile(io.BytesIO(nz_bytes)) as inner:
-                    _extract_entries(inner, inner.namelist())
+                if _is_textgrid_for_config(nz_basename):
+                    print(f"[TTS] Extracting preprocessed data from {nz_basename}")
+                    results.extend(_extract_textgrid_zip(nz_bytes))
+                else:
+                    with zipfile.ZipFile(io.BytesIO(nz_bytes)) as inner:
+                        _extract_pth(inner, inner.namelist())
             except zipfile.BadZipFile as exc:
                 print(f"[TTS]   Skipping {nz}: {exc}")
     return results
@@ -209,19 +235,45 @@ def _try_figshare_api(dest_dir):
                 files_meta = json.load(f)
             except json.JSONDecodeError:
                 return []
-        targets = [f for f in files_meta if "pretrained" in f.get("name", "").lower()]
-        if not targets:
-            targets = [f for f in files_meta if f.get("name", "").endswith(".pth.tar")]
-        if not targets:
-            targets = files_meta
-        for item in targets:
+
+        extracted = []
+
+        # Download checkpoint archive
+        pretrained = [f for f in files_meta if "pretrained" in f.get("name", "").lower()]
+        if not pretrained:
+            pretrained = [f for f in files_meta if f.get("name", "").endswith(".pth.tar")]
+        if not pretrained:
+            pretrained = files_meta
+        for item in pretrained:
             url = item.get("download_url", "")
             if not url:
                 continue
-            extracted = _try_url(url, f"figshare-api:{item.get('name')}", dest_dir)
-            if extracted:
-                return extracted
-        return []
+            r = _try_url(url, f"figshare-api:{item.get('name')}", dest_dir)
+            extracted.extend(r)
+            if _ckpts_present():
+                break
+
+        # Download textgrid/preprocessed data zip for our config
+        textgrid_items = [
+            f for f in files_meta if _is_textgrid_for_config(f.get("name", ""))
+        ]
+        for item in textgrid_items:
+            url = item.get("download_url", "")
+            if not url:
+                continue
+            tmp = tempfile.mktemp(prefix="reyd_tg_", suffix=".bin")
+            try:
+                ok, _ = curl_download(url, tmp, f"figshare-api:{item.get('name')}")
+                if ok and os.path.getsize(tmp) > 1024:
+                    r = _extract_textgrid_zip(tmp)
+                    extracted.extend(r)
+            except Exception as exc:
+                print(f"[TTS] Textgrid download exception: {exc}")
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+
+        return extracted
     finally:
         if os.path.exists(tmp_json):
             os.remove(tmp_json)
@@ -235,11 +287,12 @@ def download_checkpoints():
     os.makedirs(MODEL_DIR, exist_ok=True)
     if MODEL_DOWNLOAD_URL:
         _try_url(MODEL_DOWNLOAD_URL, "MODEL_DOWNLOAD_URL", MODEL_DIR)
-        if _ckpts_present():
+        if _ckpts_present() and _prep_present():
             return
     _try_figshare_api(MODEL_DIR)
-    if _ckpts_present():
+    if _ckpts_present() and _prep_present():
         return
+    # Bulk ndownloader URL gives a zip-of-zips containing checkpoints + textgrids
     _try_url(FIGSHARE_BULK_URL, "figshare-bulk", MODEL_DIR)
     if _ckpts_present():
         return
