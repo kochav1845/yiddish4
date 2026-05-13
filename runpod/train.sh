@@ -5,7 +5,7 @@ DATASET_DIR="${DATASET_DIR:-/workspace/dataset}"
 MODEL_DIR="${MODEL_DIR:-/workspace/model}"
 BASE_MODEL="${BASE_MODEL:-ivrit-ai/yi-whisper-large-v3}"
 EPOCHS="${EPOCHS:-5}"
-BATCH_SIZE="${BATCH_SIZE:-8}"
+BATCH_SIZE="${BATCH_SIZE:-4}"
 GRAD_ACCUM="${GRAD_ACCUM:-2}"
 
 echo "=============================="
