@@ -106,11 +106,16 @@ export default function AdminPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
 
-  // Audio playback
+  // Audio playback (recorded audio)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [audioUrls, setAudioUrls] = useState<Record<string, string>>({});
+
+  // TTS playback (description text)
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [ttsPlayingId, setTtsPlayingId] = useState<string | null>(null);
+  const [ttsLoadingId, setTtsLoadingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -182,6 +187,48 @@ export default function AdminPage() {
       setPlayingId(id);
       audio.onended = () => setPlayingId(null);
       audio.onerror = () => setPlayingId(null);
+    }
+  };
+
+  const handlePlayTts = async (id: string, text: string) => {
+    if (ttsPlayingId === id) {
+      ttsAudioRef.current?.pause();
+      setTtsPlayingId(null);
+      return;
+    }
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      setTtsPlayingId(null);
+    }
+    if (!text.trim()) return;
+    setTtsLoadingId(id);
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session?.access_token ?? ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ text: text.trim(), speaker_id: 0 }),
+        }
+      );
+      const data = await res.json();
+      if (!data.audio_b64) return;
+      const binary = atob(data.audio_b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.play();
+      setTtsPlayingId(id);
+      audio.onended = () => { setTtsPlayingId(null); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setTtsPlayingId(null); URL.revokeObjectURL(url); };
+    } finally {
+      setTtsLoadingId(null);
     }
   };
 
@@ -538,28 +585,56 @@ export default function AdminPage() {
                       {filteredTranscriptions.length === 0 ? (
                         <EmptyState icon={Mic2} text="No transcriptions found" />
                       ) : (
-                        filteredTranscriptions.map((t) => (
-                          <div key={t.id} className="px-4 sm:px-6 py-3.5 hover:bg-stone-50 transition-colors">
-                            <div className="flex items-start justify-between gap-3 mb-1">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <FileAudio size={12} className="text-amber-500 flex-shrink-0" />
-                                <span className="text-xs text-stone-500 truncate">{t.filename}</span>
-                                <span className="text-xs text-stone-300">·</span>
-                                <span className="text-xs text-stone-400 capitalize">{t.language ?? "—"}</span>
-                                <span className="text-xs text-stone-300">·</span>
-                                <span className="text-xs text-stone-400">{fmtSize(t.file_size_bytes)}</span>
+                        filteredTranscriptions.map((t) => {
+                          const isTtsPlaying = ttsPlayingId === t.id;
+                          const isTtsLoading = ttsLoadingId === t.id;
+                          return (
+                            <div key={t.id} className="px-4 sm:px-6 py-3.5 hover:bg-stone-50 transition-colors">
+                              <div className="flex items-start justify-between gap-3 mb-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileAudio size={12} className="text-amber-500 flex-shrink-0" />
+                                  <span className="text-xs text-stone-500 truncate">{t.filename}</span>
+                                  <span className="text-xs text-stone-300">·</span>
+                                  <span className="text-xs text-stone-400 capitalize">{t.language ?? "—"}</span>
+                                  <span className="text-xs text-stone-300">·</span>
+                                  <span className="text-xs text-stone-400">{fmtSize(t.file_size_bytes)}</span>
+                                </div>
+                                <p className="text-xs text-stone-400 flex-shrink-0 hidden sm:block">{fmtDate(t.created_at)}</p>
                               </div>
-                              <p className="text-xs text-stone-400 flex-shrink-0 hidden sm:block">{fmtDate(t.created_at)}</p>
+                              <div className="flex items-start gap-2">
+                                <p className="flex-1 text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
+                                  {stripDiacritics(t.transcription ?? "")}
+                                </p>
+                                {t.transcription && (
+                                  <button
+                                    onClick={() => handlePlayTts(t.id, t.transcription)}
+                                    disabled={isTtsLoading}
+                                    title={isTtsPlaying ? "Stop" : "Listen to description"}
+                                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all border ${
+                                      isTtsPlaying
+                                        ? "bg-amber-500 hover:bg-amber-600 border-amber-400 text-white"
+                                        : isTtsLoading
+                                        ? "bg-stone-100 border-stone-200 text-stone-400"
+                                        : "bg-white hover:bg-amber-50 border-stone-200 hover:border-amber-300 text-stone-400 hover:text-amber-600"
+                                    }`}
+                                  >
+                                    {isTtsLoading ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : isTtsPlaying ? (
+                                      <Pause size={11} />
+                                    ) : (
+                                      <Volume2 size={11} />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                              <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
+                                <Users size={10} />
+                                {emailFor(t.user_id)}
+                              </p>
                             </div>
-                            <p className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
-                              {stripDiacritics(t.transcription ?? "")}
-                            </p>
-                            <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
-                              <Users size={10} />
-                              {emailFor(t.user_id)}
-                            </p>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}
@@ -621,9 +696,33 @@ export default function AdminPage() {
                                     </div>
                                     <p className="text-xs text-stone-400 flex-shrink-0 hidden sm:block">{fmtDate(d.created_at)}</p>
                                   </div>
-                                  <p className="text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
-                                    {stripDiacritics(d.transcription ?? "")}
-                                  </p>
+                                  <div className="flex items-start gap-2">
+                                    <p className="flex-1 text-sm text-stone-800 leading-relaxed font-hebrew line-clamp-2" dir="auto">
+                                      {stripDiacritics(d.transcription ?? "")}
+                                    </p>
+                                    {d.transcription && (
+                                      <button
+                                        onClick={() => handlePlayTts(d.id, d.transcription)}
+                                        disabled={ttsLoadingId === d.id}
+                                        title={ttsPlayingId === d.id ? "Stop" : "Listen to description"}
+                                        className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all border ${
+                                          ttsPlayingId === d.id
+                                            ? "bg-amber-500 hover:bg-amber-600 border-amber-400 text-white"
+                                            : ttsLoadingId === d.id
+                                            ? "bg-stone-100 border-stone-200 text-stone-400"
+                                            : "bg-white hover:bg-amber-50 border-stone-200 hover:border-amber-300 text-stone-400 hover:text-amber-600"
+                                        }`}
+                                      >
+                                        {ttsLoadingId === d.id ? (
+                                          <Loader2 size={11} className="animate-spin" />
+                                        ) : ttsPlayingId === d.id ? (
+                                          <Pause size={11} />
+                                        ) : (
+                                          <Volume2 size={11} />
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
                                   <p className="text-xs text-stone-400 mt-1 flex items-center gap-1">
                                     <Users size={10} />
                                     {emailFor(d.user_id)}
