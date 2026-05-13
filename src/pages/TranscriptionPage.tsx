@@ -135,6 +135,21 @@ export default function TranscriptionPage() {
     inLang: string,
     outLang: string
   ) => {
+    let storagePath: string | null = null;
+
+    if (user?.id) {
+      const ext = file.name.split(".").pop() ?? "webm";
+      const uniqueName = `${crypto.randomUUID()}.${ext}`;
+      storagePath = `${user.id}/${uniqueName}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("transcription-audio")
+        .upload(storagePath, file, { contentType: file.type });
+      if (uploadErr) {
+        console.error("Audio upload error:", uploadErr);
+        storagePath = null;
+      }
+    }
+
     const { error: dbError } = await supabase.from("transcriptions").insert({
       filename: file.name,
       transcription: transcriptionText,
@@ -142,6 +157,7 @@ export default function TranscriptionPage() {
       language: inLang,
       output_language: outLang,
       user_id: user?.id,
+      storage_path: storagePath,
     });
 
     if (dbError) {
