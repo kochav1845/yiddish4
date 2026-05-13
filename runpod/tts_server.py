@@ -71,8 +71,10 @@ def _detect_preprocessed_dir() -> str:
         return fallback
 
 PREPROCESSED_DIR  = _detect_preprocessed_dir()
+HIFIGAN_DIR       = os.path.join(REPO_DIR, "hifigan")
 VOLUME_CKPT_DIR   = f"/runpod-volume/ckpt/{CONFIG}"
 VOLUME_PREP_DIR   = f"/runpod-volume/preprocessed/{CONFIG}"
+VOLUME_HIFIGAN_DIR = "/runpod-volume/hifigan"
 FIGSHARE_API_URL  = "https://api.figshare.com/v2/articles/19350539/files"
 FIGSHARE_BULK_URL = "https://figshare.com/ndownloader/articles/19350539/versions/1"
 MODEL_DOWNLOAD_URL = os.environ.get("MODEL_DOWNLOAD_URL", "").strip()
@@ -381,6 +383,54 @@ def _prep_present():
     return bool(glob.glob(os.path.join(PREPROCESSED_DIR, "stats.json")))
 
 
+def _hifigan_present():
+    return os.path.exists(os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar"))
+
+
+def ensure_vocoder():
+    """Unzip hifigan/generator_universal.pth.tar.zip if the .pth.tar is missing."""
+    if _hifigan_present():
+        return
+
+    # Try restoring from network volume first
+    if os.path.isdir(VOLUME_HIFIGAN_DIR):
+        src = os.path.join(VOLUME_HIFIGAN_DIR, "generator_universal.pth.tar")
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar"))
+            print("[TTS] Restored HiFi-GAN from volume.")
+            return
+
+    # The REYD-TTS repo ships the file as a zip inside hifigan/
+    for zip_name in ("generator_universal.pth.tar.zip", "generator_universal.zip"):
+        zip_path = os.path.join(HIFIGAN_DIR, zip_name)
+        if os.path.exists(zip_path):
+            print(f"[TTS] Unzipping {zip_name}...")
+            with zipfile.ZipFile(zip_path) as zf:
+                for entry in zf.namelist():
+                    if entry.endswith(".pth.tar"):
+                        dest = os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar")
+                        with zf.open(entry) as src_f, open(dest, "wb") as dst_f:
+                            shutil.copyfileobj(src_f, dst_f)
+                        print(f"[TTS] HiFi-GAN extracted → {dest}")
+            if _hifigan_present():
+                # Cache to volume for next run
+                try:
+                    os.makedirs(VOLUME_HIFIGAN_DIR, exist_ok=True)
+                    shutil.copy2(
+                        os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar"),
+                        os.path.join(VOLUME_HIFIGAN_DIR, "generator_universal.pth.tar"),
+                    )
+                    print("[TTS] Cached HiFi-GAN to volume.")
+                except Exception as exc:
+                    print(f"[TTS] HiFi-GAN volume cache failed (non-fatal): {exc}")
+                return
+
+    raise RuntimeError(
+        "HiFi-GAN vocoder not found. Expected hifigan/generator_universal.pth.tar "
+        "or hifigan/generator_universal.pth.tar.zip in the FastSpeech2 repo."
+    )
+
+
 def ensure_model():
     global _restore_step
     if _restore_step is not None:
@@ -400,6 +450,7 @@ def ensure_model():
             f"Preprocessed data missing at {PREPROCESSED_DIR} — "
             "expected stats.json to be present after download."
         )
+    ensure_vocoder()
     _restore_step = find_checkpoint_step()
     print(f"[TTS] Model ready — checkpoint step={_restore_step}")
     return _restore_step
