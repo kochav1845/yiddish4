@@ -51,7 +51,12 @@ MODEL_DIR = os.environ.get(
     "MODEL_DIR",
     os.path.join(REPO_DIR, "output", "ckpt", CONFIG),
 )
+PREPROCESSED_DIR = os.environ.get(
+    "PREPROCESSED_DIR",
+    os.path.join(REPO_DIR, "preprocessed_data", CONFIG),
+)
 VOLUME_CKPT_DIR   = f"/runpod-volume/ckpt/{CONFIG}"
+VOLUME_PREP_DIR   = f"/runpod-volume/preprocessed/{CONFIG}"
 FIGSHARE_API_URL  = "https://api.figshare.com/v2/articles/19350539/files"
 FIGSHARE_BULK_URL = "https://figshare.com/ndownloader/articles/19350539/versions/1"
 MODEL_DOWNLOAD_URL = os.environ.get("MODEL_DOWNLOAD_URL", "").strip()
@@ -105,26 +110,37 @@ def _write_member(zf, entry, dest_dir, results, raw_bytes=None):
     results.append(dest)
 
 
+_PREP_EXTS = {".json", ".txt", ".npy", ".npz"}
+
+
 def _extract_zip(zip_path, dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
+    os.makedirs(PREPROCESSED_DIR, exist_ok=True)
     results = []
+
+    def _extract_entries(zf, entries):
+        direct_pth = [e for e in entries if e.endswith(".pth.tar")]
+        config_pth = [e for e in direct_pth if CONFIG in e]
+        for entry in (config_pth or direct_pth):
+            _write_member(zf, entry, dest_dir, results)
+
+        for entry in entries:
+            basename = os.path.basename(entry)
+            if not basename:
+                continue
+            _, ext = os.path.splitext(basename.lower())
+            if ext in _PREP_EXTS:
+                _write_member(zf, entry, PREPROCESSED_DIR, results)
+
     with zipfile.ZipFile(zip_path) as outer:
         entries = outer.namelist()
-        print(f"[TTS] Outer zip has {len(entries)} entries")
-        direct_pth  = [e for e in entries if e.endswith(".pth.tar")]
-        config_pth  = [e for e in direct_pth if CONFIG in e]
-        for entry in (config_pth or direct_pth):
-            _write_member(outer, entry, dest_dir, results)
-        nested = [e for e in entries if e.lower().endswith(".zip")]
-        for nz in nested:
+        print(f"[TTS] Outer zip has {len(entries)} entries: {entries}")
+        _extract_entries(outer, entries)
+        for nz in [e for e in entries if e.lower().endswith(".zip")]:
             try:
                 nz_bytes = outer.read(nz)
                 with zipfile.ZipFile(io.BytesIO(nz_bytes)) as inner:
-                    inner_entries = inner.namelist()
-                    inner_pth = [e for e in inner_entries if e.endswith(".pth.tar")]
-                    inner_cfg = [e for e in inner_pth if CONFIG in e]
-                    for entry in (inner_cfg or inner_pth):
-                        _write_member(inner, entry, dest_dir, results)
+                    _extract_entries(inner, inner.namelist())
             except zipfile.BadZipFile as exc:
                 print(f"[TTS]   Skipping {nz}: {exc}")
     return results
@@ -249,6 +265,13 @@ def restore_from_volume():
         if not os.path.exists(dst):
             shutil.copy2(src, dst)
             print(f"[TTS] Restored from volume: {os.path.basename(src)}")
+    if os.path.isdir(VOLUME_PREP_DIR):
+        os.makedirs(PREPROCESSED_DIR, exist_ok=True)
+        for src in glob.glob(os.path.join(VOLUME_PREP_DIR, "*")):
+            dst = os.path.join(PREPROCESSED_DIR, os.path.basename(src))
+            if not os.path.exists(dst):
+                shutil.copy2(src, dst)
+                print(f"[TTS] Restored preprocessed: {os.path.basename(src)}")
     return _ckpts_present()
 
 
@@ -260,6 +283,12 @@ def cache_to_volume():
             if not os.path.exists(dst):
                 shutil.copy2(src, dst)
                 print(f"[TTS] Cached to volume: {os.path.basename(src)}")
+        os.makedirs(VOLUME_PREP_DIR, exist_ok=True)
+        for src in glob.glob(os.path.join(PREPROCESSED_DIR, "*")):
+            dst = os.path.join(VOLUME_PREP_DIR, os.path.basename(src))
+            if not os.path.exists(dst):
+                shutil.copy2(src, dst)
+                print(f"[TTS] Cached preprocessed to volume: {os.path.basename(src)}")
     except Exception as exc:
         print(f"[TTS] Volume cache write failed (non-fatal): {exc}")
 
@@ -279,18 +308,29 @@ def find_checkpoint_step():
     return max(steps)
 
 
+def _prep_present():
+    return bool(glob.glob(os.path.join(PREPROCESSED_DIR, "stats.json")))
+
+
 def ensure_model():
     global _restore_step
     if _restore_step is not None:
         return _restore_step
-    if not _ckpts_present():
-        print("[TTS] No local checkpoints. Checking network volume...")
-        if restore_from_volume():
+    need_download = not _ckpts_present() or not _prep_present()
+    if need_download:
+        print("[TTS] Checking network volume...")
+        restored = restore_from_volume()
+        if restored and _prep_present():
             print("[TTS] Loaded from network volume.")
         else:
-            print("[TTS] Downloading checkpoints...")
+            print("[TTS] Downloading checkpoints and preprocessed data...")
             download_checkpoints()
             cache_to_volume()
+    if not _prep_present():
+        raise RuntimeError(
+            f"Preprocessed data missing at {PREPROCESSED_DIR} — "
+            "expected stats.json to be present after download."
+        )
     _restore_step = find_checkpoint_step()
     print(f"[TTS] Model ready — checkpoint step={_restore_step}")
     return _restore_step
