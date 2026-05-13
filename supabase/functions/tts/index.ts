@@ -19,11 +19,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const podUrl = Deno.env.get("TTS_POD_URL")?.replace(/\/$/, "");
-
-    if (!podUrl) {
-      return jsonRes({ error: "TTS service not configured. TTS_POD_URL secret is missing." }, 503);
-    }
+    const podUrl = (Deno.env.get("TTS_POD_URL") ?? "https://4hdxl2boktxp3o-8000.proxy.runpod.net").replace(/\/$/, "");
 
     const url = new URL(req.url);
 
