@@ -27,10 +27,8 @@ from typing import Any
 
 import torch
 from datasets import DatasetDict, load_from_disk
-from peft import LoraConfig, TaskType, get_peft_model
+from peft import LoraConfig, get_peft_model
 from transformers import (
-    AutoModelForSpeechSeq2Seq,
-    AutoProcessor,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
     WhisperForConditionalGeneration,
@@ -105,9 +103,9 @@ def load_model_with_lora(base_model: str, hf_token: str | None) -> tuple:
     )
     model.config.forced_decoder_ids = None
     model.config.suppress_tokens = []
+    model.config.use_cache = False
 
     lora_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM,
         r=32,
         lora_alpha=64,
         target_modules=["q_proj", "v_proj"],
@@ -175,12 +173,7 @@ def main() -> None:
     with open(os.path.join(args.output_dir, "base_model_id.txt"), "w") as f:
         f.write(args.base_model)
 
-    # 3. Pre-process audio features
-    print("Pre-processing audio features ...")
-    _prepare = partial(prepare_dataset, processor=processor)
-    dataset = dataset.map(_prepare, remove_columns=["audio", "sentence", "speaker", "dialect", "gender"], num_proc=4)
-
-    # 4. Data collator
+    # 3. Data collator — feature extraction happens on-the-fly during training
     collator = DataCollator(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
@@ -195,7 +188,7 @@ def main() -> None:
         learning_rate=args.learning_rate,
         warmup_steps=args.warmup_steps,
         num_train_epochs=args.epochs,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
@@ -210,7 +203,7 @@ def main() -> None:
         push_to_hub=bool(args.push_to_hub),
         hub_model_id=args.push_to_hub,
         hub_token=args.hf_token,
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,
         remove_unused_columns=False,
     )
 
