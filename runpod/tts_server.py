@@ -384,18 +384,35 @@ def _prep_present():
 
 
 def _hifigan_present():
-    return os.path.exists(os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar"))
+    path = os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar")
+    if not os.path.isfile(path):
+        return False
+    size = os.path.getsize(path)
+    if size < 1_000_000:
+        print(f"[TTS] generator_universal.pth.tar exists but is only {size} bytes — treating as missing")
+        return False
+    return True
 
 
 def ensure_vocoder():
-    """Unzip hifigan/generator_universal.pth.tar.zip if the .pth.tar is missing."""
+    """Unzip hifigan/generator_universal.pth.tar.zip if the .pth.tar is missing or invalid."""
+    # Diagnostic: show all files in hifigan dir
+    try:
+        hifigan_files = os.listdir(HIFIGAN_DIR)
+        for fname in hifigan_files:
+            fpath = os.path.join(HIFIGAN_DIR, fname)
+            fsize = os.path.getsize(fpath) if os.path.isfile(fpath) else -1
+            print(f"[TTS] hifigan/{fname}  size={fsize:,}")
+    except Exception as exc:
+        print(f"[TTS] Could not list hifigan dir: {exc}")
+
     if _hifigan_present():
         return
 
     # Try restoring from network volume first
     if os.path.isdir(VOLUME_HIFIGAN_DIR):
         src = os.path.join(VOLUME_HIFIGAN_DIR, "generator_universal.pth.tar")
-        if os.path.exists(src):
+        if os.path.isfile(src) and os.path.getsize(src) > 1_000_000:
             shutil.copy2(src, os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar"))
             print("[TTS] Restored HiFi-GAN from volume.")
             return
@@ -403,8 +420,13 @@ def ensure_vocoder():
     # The REYD-TTS repo ships the file as a zip inside hifigan/
     for zip_name in ("generator_universal.pth.tar.zip", "generator_universal.zip"):
         zip_path = os.path.join(HIFIGAN_DIR, zip_name)
-        if os.path.exists(zip_path):
-            print(f"[TTS] Unzipping {zip_name}...")
+        zip_size = os.path.getsize(zip_path) if os.path.isfile(zip_path) else 0
+        if zip_size < 1_000_000:
+            if zip_size > 0:
+                print(f"[TTS] {zip_name} exists but only {zip_size} bytes — skipping")
+            continue
+        print(f"[TTS] Unzipping {zip_name} ({zip_size:,} bytes)...")
+        try:
             with zipfile.ZipFile(zip_path) as zf:
                 for entry in zf.namelist():
                     if entry.endswith(".pth.tar"):
@@ -412,8 +434,41 @@ def ensure_vocoder():
                         with zf.open(entry) as src_f, open(dest, "wb") as dst_f:
                             shutil.copyfileobj(src_f, dst_f)
                         print(f"[TTS] HiFi-GAN extracted → {dest}")
+        except zipfile.BadZipFile as exc:
+            print(f"[TTS] {zip_name} is not a valid zip: {exc}")
+            continue
+        if _hifigan_present():
+            # Cache to volume for next run
+            try:
+                os.makedirs(VOLUME_HIFIGAN_DIR, exist_ok=True)
+                shutil.copy2(
+                    os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar"),
+                    os.path.join(VOLUME_HIFIGAN_DIR, "generator_universal.pth.tar"),
+                )
+                print("[TTS] Cached HiFi-GAN to volume.")
+            except Exception as exc:
+                print(f"[TTS] HiFi-GAN volume cache failed (non-fatal): {exc}")
+            return
+
+    # Last resort: download the zip directly from GitHub
+    print("[TTS] HiFi-GAN zip not found locally — attempting GitHub download...")
+    github_url = (
+        "https://raw.githubusercontent.com/REYD-TTS/FastSpeech2/main/"
+        "hifigan/generator_universal.pth.tar.zip"
+    )
+    tmp_zip = tempfile.mktemp(prefix="hifigan_", suffix=".zip")
+    try:
+        ok, msg = curl_download(github_url, tmp_zip, "github-hifigan-zip")
+        if ok and os.path.getsize(tmp_zip) > 1_000_000:
+            print(f"[TTS] Downloaded HiFi-GAN zip ({os.path.getsize(tmp_zip):,} bytes), extracting...")
+            with zipfile.ZipFile(tmp_zip) as zf:
+                for entry in zf.namelist():
+                    if entry.endswith(".pth.tar"):
+                        dest = os.path.join(HIFIGAN_DIR, "generator_universal.pth.tar")
+                        with zf.open(entry) as src_f, open(dest, "wb") as dst_f:
+                            shutil.copyfileobj(src_f, dst_f)
+                        print(f"[TTS] HiFi-GAN extracted → {dest}")
             if _hifigan_present():
-                # Cache to volume for next run
                 try:
                     os.makedirs(VOLUME_HIFIGAN_DIR, exist_ok=True)
                     shutil.copy2(
@@ -424,10 +479,18 @@ def ensure_vocoder():
                 except Exception as exc:
                     print(f"[TTS] HiFi-GAN volume cache failed (non-fatal): {exc}")
                 return
+        else:
+            print(f"[TTS] GitHub HiFi-GAN download failed: {msg}")
+    except Exception as exc:
+        print(f"[TTS] GitHub HiFi-GAN download exception: {exc}")
+    finally:
+        if os.path.exists(tmp_zip):
+            os.remove(tmp_zip)
 
     raise RuntimeError(
-        "HiFi-GAN vocoder not found. Expected hifigan/generator_universal.pth.tar "
-        "or hifigan/generator_universal.pth.tar.zip in the FastSpeech2 repo."
+        "HiFi-GAN vocoder not found and could not be obtained. "
+        "Expected hifigan/generator_universal.pth.tar (>1MB) or a valid "
+        "hifigan/generator_universal.pth.tar.zip in the FastSpeech2 repo."
     )
 
 
