@@ -29,6 +29,13 @@ import zipfile
 import tarfile
 from contextlib import asynccontextmanager
 
+import nltk
+for _pkg in ("averaged_perceptron_tagger", "averaged_perceptron_tagger_eng", "cmudict", "punkt", "punkt_tab"):
+    try:
+        nltk.download(_pkg, quiet=True)
+    except Exception:
+        pass
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
