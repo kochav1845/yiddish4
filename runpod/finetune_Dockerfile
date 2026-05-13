@@ -1,3 +1,23 @@
+# ── Yiddish Whisper Fine-Tune Image ──────────────────────────────────────────
+# Build (from repo root):
+#   docker build -f runpod/finetune_Dockerfile -t yiddish-finetune .
+#
+# Run on RunPod pod (set these env vars in the pod settings):
+#   HF_TOKEN    — your HuggingFace token (needed to download gated models)
+#   HF_PUSH_TO  — where to push the finished model, e.g. yourname/yiddish-whisper
+#
+# Start command:
+#   bash /app/train.sh
+#
+# Optional overrides (also set as env vars):
+#   BASE_MODEL  (default: ivrit-ai/yi-whisper-large-v3)
+#   EPOCHS      (default: 5)
+#   BATCH_SIZE  (default: 8)
+#   GRAD_ACCUM  (default: 2)
+#   DATASET_DIR (default: /workspace/dataset)
+#   MODEL_DIR   (default: /workspace/model)
+# ─────────────────────────────────────────────────────────────────────────────
+
 FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,22 +29,14 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /workspace
+WORKDIR /app
 
 COPY runpod/finetune_requirements.txt .
 RUN pip install --no-cache-dir -r finetune_requirements.txt
 
 COPY runpod/prepare_reyd_finetune.py .
 COPY runpod/finetune_whisper.py .
+COPY runpod/train.sh .
+RUN chmod +x train.sh
 
-# Step 1 — prepare dataset (downloads corpus, converts to HF format)
-# docker run ... python prepare_reyd_finetune.py --output_dir /workspace/dataset
-
-# Step 2 — fine-tune
-# docker run ... python finetune_whisper.py \
-#   --dataset_dir /workspace/dataset \
-#   --output_dir  /workspace/model \
-#   --base_model  ivrit-ai/yi-whisper-large-v3 \
-#   --epochs 5
-
-CMD ["python", "-u", "finetune_whisper.py"]
+CMD ["bash", "train.sh"]
