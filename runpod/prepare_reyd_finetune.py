@@ -2,22 +2,24 @@
 Download the REYD Yiddish TTS corpus from Edinburgh DataShare and convert it
 into a HuggingFace dataset ready for Whisper fine-tuning.
 
+Corpus layout inside the zip:
+  reyd-dataset/audio/{lit1,lit2,pol1}/*.wav
+  reyd-dataset/text/yivo_original/{lit1,lit2,pol1}/{stem}.lab
+
 Output structure (saved to --output_dir):
   train/  test/   (80/20 split, stratified by speaker)
   dataset_dict.json
 
 Usage:
   python prepare_reyd_finetune.py --output_dir ./reyd_whisper_dataset
-  python prepare_reyd_finetune.py --output_dir ./reyd_whisper_dataset --push_to_hub myorg/reyd-yiddish-asr
+  python prepare_reyd_finetune.py --corpus_zip /workspace/reyd-dataset.zip --output_dir ./reyd_whisper_dataset
 """
 
 import argparse
-import csv
-import io
 import os
 import random
-import re
 import shutil
+import subprocess
 import tempfile
 import urllib.request
 import zipfile
@@ -31,7 +33,6 @@ CORPUS_URL = (
 )
 SAMPLE_RATE = 16_000
 
-# Map speaker directory names to human-readable labels
 SPEAKER_META = {
     "lit1": {"speaker_id": 0, "dialect": "lithuanian", "gender": "male"},
     "lit2": {"speaker_id": 1, "dialect": "lithuanian", "gender": "female"},
@@ -47,85 +48,52 @@ def download_corpus(dest_zip: Path) -> None:
     print(f"Downloaded to {dest_zip}")
 
 
-def find_transcript_file(speaker_dir: Path) -> Path | None:
-    """Return the first .csv or .txt file that looks like a transcript list."""
-    for candidate in sorted(speaker_dir.rglob("*.csv")):
-        return candidate
-    for candidate in sorted(speaker_dir.rglob("metadata.txt")):
-        return candidate
-    # Some corpora use a single tab-separated file at the root
-    return None
-
-
-def parse_metadata(meta_path: Path) -> dict[str, str]:
-    """
-    Parse a metadata file and return {stem: text}.
-    Supports:
-      - LJSpeech CSV:  filename|text|normalized
-      - TSV:           filename\ttext
-      - plain two-col: filename text (space-separated stem + rest)
-    """
-    mapping: dict[str, str] = {}
-    text = meta_path.read_text(encoding="utf-8", errors="replace")
-    delimiter = "\t" if "\t" in text else "|"
-    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-    for row in reader:
-        if len(row) < 2:
-            continue
-        stem = Path(row[0]).stem  # strip path + extension if present
-        # prefer the last column (normalized text) when available
-        sentence = row[-1].strip()
-        if sentence:
-            mapping[stem] = sentence
-    return mapping
-
-
 def collect_examples(extract_dir: Path) -> list[dict]:
-    """Walk the extracted corpus and collect {audio_path, sentence, speaker, dialect, gender}."""
+    """
+    Walk the REYD corpus:
+      <root>/audio/{speaker}/*.wav
+      <root>/text/yivo_original/{speaker}/{stem}.lab
+    The zip may extract into a single top-level sub-folder.
+    """
     examples: list[dict] = []
+
+    # Descend past a single wrapper directory if needed
     root = extract_dir
+    children = [d for d in root.iterdir() if d.is_dir()]
+    if children and not (root / "audio").exists():
+        root = children[0]
 
-    # Try to find speaker sub-directories
-    speaker_dirs = [d for d in sorted(root.rglob("wavs")) if d.is_dir()]
-    if not speaker_dirs:
-        # Flat layout — all wavs at top level
-        speaker_dirs = [root]
+    audio_root = root / "audio"
+    text_root = root / "text" / "yivo_original"
 
-    for wavs_dir in speaker_dirs:
-        # Determine speaker from directory name
-        speaker_key = None
-        for part in reversed(wavs_dir.parts):
-            if part in SPEAKER_META:
-                speaker_key = part
-                break
-        meta_obj = SPEAKER_META.get(speaker_key, {"speaker_id": -1, "dialect": "unknown", "gender": "unknown"})
+    if not audio_root.exists():
+        raise RuntimeError(f"Expected audio directory not found at {audio_root}")
 
-        # Find transcript file in parent or sibling
-        meta_path = find_transcript_file(wavs_dir.parent)
-        if meta_path is None:
-            meta_path = find_transcript_file(wavs_dir)
-        transcript: dict[str, str] = parse_metadata(meta_path) if meta_path else {}
+    speaker_dirs = sorted(d for d in audio_root.iterdir() if d.is_dir())
 
-        for wav_file in sorted(wavs_dir.glob("*.wav")):
+    for speaker_dir in speaker_dirs:
+        speaker_key = speaker_dir.name
+        meta_obj = SPEAKER_META.get(
+            speaker_key,
+            {"speaker_id": -1, "dialect": "unknown", "gender": "unknown"},
+        )
+        lab_dir = text_root / speaker_key
+
+        for wav_file in sorted(speaker_dir.glob("*.wav")):
             stem = wav_file.stem
-            sentence = transcript.get(stem, "")
-            if not sentence:
-                # Try matching by numeric suffix
-                nums = re.search(r"(\d+)$", stem)
-                if nums:
-                    for key, val in transcript.items():
-                        if key.endswith(nums.group(1)):
-                            sentence = val
-                            break
-            if not sentence:
-                print(f"  [skip] No transcript for {wav_file.name}")
+            lab_file = lab_dir / f"{stem}.lab"
+            if not lab_file.exists():
+                print(f"  [skip] No .lab for {wav_file.name}")
                 continue
-
+            sentence = lab_file.read_text(encoding="utf-8", errors="replace").strip()
+            if not sentence:
+                print(f"  [skip] Empty transcript for {wav_file.name}")
+                continue
             examples.append(
                 {
                     "audio": str(wav_file),
                     "sentence": sentence,
-                    "speaker": speaker_key or "unknown",
+                    "speaker": speaker_key,
                     "speaker_id": meta_obj["speaker_id"],
                     "dialect": meta_obj["dialect"],
                     "gender": meta_obj["gender"],
@@ -137,10 +105,7 @@ def collect_examples(extract_dir: Path) -> list[dict]:
 
 
 def resample_if_needed(wav_path: str) -> str:
-    """
-    Return path to a 16 kHz mono WAV.  If the file already matches, return as-is.
-    Resampled files are written to /tmp/reyd_resampled/.
-    """
+    """Return path to a 16 kHz mono WAV, resampling via ffmpeg if needed."""
     info = sf.info(wav_path)
     if info.samplerate == SAMPLE_RATE and info.channels == 1:
         return wav_path
@@ -149,7 +114,6 @@ def resample_if_needed(wav_path: str) -> str:
     out_dir.mkdir(exist_ok=True)
     out_path = str(out_dir / Path(wav_path).name)
 
-    import subprocess
     subprocess.run(
         ["ffmpeg", "-y", "-i", wav_path, "-ar", str(SAMPLE_RATE), "-ac", "1", out_path],
         check=True, capture_output=True,
@@ -160,7 +124,6 @@ def resample_if_needed(wav_path: str) -> str:
 def build_dataset(examples: list[dict], test_ratio: float = 0.2, seed: int = 42) -> DatasetDict:
     rng = random.Random(seed)
 
-    # Stratify by speaker
     by_speaker: dict[str, list] = {}
     for ex in examples:
         by_speaker.setdefault(ex["speaker"], []).append(ex)
@@ -186,7 +149,6 @@ def build_dataset(examples: list[dict], test_ratio: float = 0.2, seed: int = 42)
     )
 
     def to_hf(rows: list[dict]) -> Dataset:
-        # Ensure audio is resampled before handing to HF Audio feature
         resampled = []
         for row in rows:
             r = dict(row)
@@ -202,7 +164,7 @@ def main() -> None:
     parser.add_argument("--output_dir", default="./reyd_whisper_dataset")
     parser.add_argument("--corpus_zip", default=None, help="Path to pre-downloaded reyd-dataset.zip")
     parser.add_argument("--test_ratio", type=float, default=0.2)
-    parser.add_argument("--push_to_hub", default=None, help="HuggingFace Hub repo id, e.g. myorg/reyd-yiddish-asr")
+    parser.add_argument("--push_to_hub", default=None, help="HuggingFace Hub repo id")
     parser.add_argument("--hf_token", default=os.environ.get("HF_TOKEN"))
     args = parser.parse_args()
 
@@ -212,33 +174,27 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
-        # 1. Obtain the zip
         if args.corpus_zip:
             zip_path = Path(args.corpus_zip)
         else:
             zip_path = tmp_path / "reyd-dataset.zip"
             download_corpus(zip_path)
 
-        # 2. Extract
         extract_dir = tmp_path / "reyd"
         print(f"Extracting to {extract_dir} ...")
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(extract_dir)
 
-        # 3. Collect examples
         examples = collect_examples(extract_dir)
         if not examples:
             raise RuntimeError("No audio/transcript pairs found — check corpus structure.")
 
-        # 4. Build HF DatasetDict
         dataset = build_dataset(examples, test_ratio=args.test_ratio)
 
-        # 5. Save
         dataset.save_to_disk(str(output_dir))
         print(f"Dataset saved to {output_dir}")
         print(dataset)
 
-        # 6. Optionally push to Hub
         if args.push_to_hub:
             from huggingface_hub import login
             if args.hf_token:

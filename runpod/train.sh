@@ -19,10 +19,18 @@ echo "Model dir  : $MODEL_DIR"
 echo ""
 
 # ── Step 1: prepare dataset ──────────────────────────────────────────────────
+CORPUS_ZIP="${CORPUS_ZIP:-/workspace/reyd-dataset.zip}"
+
 if [ ! -f "$DATASET_DIR/dataset_dict.json" ]; then
   echo "[1/3] Downloading and preparing REYD corpus..."
+  EXTRA_ARGS=""
+  if [ -f "$CORPUS_ZIP" ]; then
+    echo "  Using cached zip: $CORPUS_ZIP"
+    EXTRA_ARGS="--corpus_zip $CORPUS_ZIP"
+  fi
   python prepare_reyd_finetune.py \
-    --output_dir "$DATASET_DIR"
+    --output_dir "$DATASET_DIR" \
+    $EXTRA_ARGS
 else
   echo "[1/3] Dataset already prepared at $DATASET_DIR — skipping download."
 fi
