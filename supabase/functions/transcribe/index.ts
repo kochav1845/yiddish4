@@ -196,11 +196,13 @@ async function handleStatusCheck(jobId: string): Promise<Response> {
     if (output?.error) {
       return jsonRes({ status: "FAILED", error: output.error }, 502);
     }
-    const rawText = stripNikud(output?.transcription ?? "");
-    const rawTextIvrit = output?.transcription_ivrit != null
-      ? stripNikud(output.transcription_ivrit as string)
+    const rawText = stripNikud((output?.transcription as string) ?? "");
+    const rawTextIvrit = typeof output?.transcription_ivrit === "string"
+      ? stripNikud(output.transcription_ivrit)
       : null;
-    return jsonRes({ status: "COMPLETED", rawText, rawTextIvrit });
+    const ivritError = (output?.transcription_ivrit_error as string) ?? null;
+    console.log(`[STATUS] rawText len=${rawText.length} rawTextIvrit=${rawTextIvrit !== null ? rawTextIvrit.length : "null"} ivritError=${ivritError}`);
+    return jsonRes({ status: "COMPLETED", rawText, rawTextIvrit, ivritError });
   }
 
   if (status === "FAILED" || status === "CANCELLED") {

@@ -32,8 +32,10 @@ export default function TranscriptionPage() {
   const [result, setResult] = useState<{
     text: string;
     textIvrit: string | null;
+    ivritError: string | null;
     filename: string;
     outputLang: Language;
+    isYiddishJob: boolean;
   } | null>(null);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [showDatasetPanel, setShowDatasetPanel] = useState(false);
@@ -100,7 +102,7 @@ export default function TranscriptionPage() {
     return data.transcription ?? rawText;
   };
 
-  const pollEdgeStatus = async (jobId: string): Promise<{ rawText: string; rawTextIvrit: string | null }> => {
+  const pollEdgeStatus = async (jobId: string): Promise<{ rawText: string; rawTextIvrit: string | null; ivritError: string | null }> => {
     const maxWait = 900_000;
     const pollInterval = 3_000;
     const started = Date.now();
@@ -121,7 +123,11 @@ export default function TranscriptionPage() {
 
       const data = await res.json();
 
-      if (data.status === "COMPLETED") return { rawText: data.rawText ?? "", rawTextIvrit: data.rawTextIvrit ?? null };
+      if (data.status === "COMPLETED") return {
+        rawText: data.rawText ?? "",
+        rawTextIvrit: data.rawTextIvrit ?? null,
+        ivritError: data.ivritError ?? null,
+      };
       if (data.status === "FAILED" || data.status === "CANCELLED") {
         throw new Error(data.error ?? "Transcription job failed");
       }
@@ -211,6 +217,7 @@ export default function TranscriptionPage() {
       let outLang: string = outputLanguage;
       let rawText = "";
       let rawTextIvrit: string | null = null;
+      let ivritError: string | null = null;
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), SUBMIT_TIMEOUT_MS);
@@ -244,11 +251,13 @@ export default function TranscriptionPage() {
         if (submitData.status === "COMPLETED") {
           rawText = submitData.rawText ?? "";
           rawTextIvrit = submitData.rawTextIvrit ?? null;
+          ivritError = submitData.ivritError ?? null;
         } else if (submitData.jobId) {
           setStatusMsg("טראַנסקריבירט...");
           const polled = await pollEdgeStatus(submitData.jobId);
           rawText = polled.rawText;
           rawTextIvrit = polled.rawTextIvrit;
+          ivritError = polled.ivritError;
         } else {
           setError("Unexpected response from server.");
           return;
@@ -287,8 +296,10 @@ export default function TranscriptionPage() {
       setResult({
         text: transcriptionText,
         textIvrit: rawTextIvrit,
+        ivritError,
         filename: file.name,
         outputLang: outputLanguage,
+        isYiddishJob: inputLanguage === "yiddish",
       });
 
       await saveResult(file, rawText, transcriptionText, inputLanguage, outputLanguage);
@@ -471,17 +482,14 @@ export default function TranscriptionPage() {
 
         {result && (
           <div className="mb-8 space-y-6">
+            {/* Our fine-tuned model */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2" dir="rtl">
-                <EditableText
-                  contentKey="result_heading"
-                  defaultValue="טראַנסקריפּציע"
-                  as="h3"
-                  className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew"
-                  dir="rtl"
-                />
-                <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-hebrew">
-                  yiddishstt
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew">
+                  טראַנסקריפּציע
+                </span>
+                <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  yiddishstt (fine-tuned)
                 </span>
               </div>
               <TranscriptionResult
@@ -505,21 +513,30 @@ export default function TranscriptionPage() {
               )}
             </div>
 
-            {result.textIvrit && (
+            {/* Baseline model — always shown for Yiddish jobs */}
+            {result.isYiddishJob && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2" dir="rtl">
-                  <h3 className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew">
                     טראַנסקריפּציע
-                  </h3>
-                  <span className="text-xs font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full font-hebrew">
-                    ivrit-ai baseline
+                  </span>
+                  <span className="text-xs font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full">
+                    ivrit-ai yi-whisper (baseline)
                   </span>
                 </div>
-                <TranscriptionResult
-                  text={result.textIvrit}
-                  filename={result.filename}
-                  language={result.outputLang}
-                />
+                {result.textIvrit ? (
+                  <TranscriptionResult
+                    text={result.textIvrit}
+                    filename={result.filename}
+                    language={result.outputLang}
+                  />
+                ) : (
+                  <div className="bg-stone-50 border border-stone-200 rounded-2xl px-5 py-4 text-sm text-stone-400 font-hebrew">
+                    {result.ivritError
+                      ? `Baseline model error: ${result.ivritError}`
+                      : "Baseline model output not available — the server may be running an older version. Trigger a new RunPod worker cold-start to reload both models."}
+                  </div>
+                )}
               </div>
             )}
           </div>

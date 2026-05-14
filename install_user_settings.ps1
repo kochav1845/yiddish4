@@ -1,0 +1,8 @@
+requests==2.32.3
+sounddevice==0.4.7
+pyperclip==1.9.0
+pynput==1.7.7
+pyautogui==0.9.54
+numpy==2.0.1
+imageio-ffmpeg==0.5.1
+pyinstaller==6.10.0

@@ -1,0 +1,92 @@
+# VoicePaste Secure Package
+
+This package gives you:
+
+1. A backend proxy server that keeps the RunPod API key secret.
+2. A Windows client that records audio, converts it to MP3, sends it to your backend, and pastes the transcript.
+
+## Important security rule
+
+Do **not** put the RunPod API key inside the Windows EXE.
+
+The Windows EXE calls your backend. Your backend calls RunPod. This keeps the RunPod key off your user's computer.
+
+## Backend
+
+Folder: `backend`
+
+Environment variables:
+
+- `RUNPOD_API_KEY`: your real RunPod API key.
+- `RUNPOD_ENDPOINT_ID`: default is `c5y5e4hr3v3496`.
+- `CLIENT_TOKEN`: a token/password your Windows client uses to call the backend.
+- `PORT`: default `8080`.
+
+Local test:
+
+```powershell
+cd backend
+.\run_local.ps1
+```
+
+Deploy to a hosting provider that supports Docker, or run:
+
+```bash
+docker build -t voicepaste-backend .
+docker run -p 8080:8080 \
+  -e RUNPOD_API_KEY="your-runpod-key" \
+  -e CLIENT_TOKEN="your-client-token" \
+  -e RUNPOD_ENDPOINT_ID="c5y5e4hr3v3496" \
+  voicepaste-backend
+```
+
+## Windows client
+
+Folder: `windows_client`
+
+Build the EXE:
+
+```powershell
+cd windows_client
+.\build_exe.ps1
+```
+
+The output will be:
+
+```text
+windows_client\dist\VoicePasteSecure.exe
+```
+
+Before running the EXE on a user's computer, set these environment variables:
+
+```powershell
+setx VOICEPASTE_SERVER_URL "https://your-backend-url"
+setx VOICEPASTE_CLIENT_TOKEN "your-client-token"
+setx VOICEPASTE_HOTKEY "<ctrl>+<alt>+<space>"
+setx VOICEPASTE_VERIFY_SSL "false"
+```
+
+Or run:
+
+```powershell
+.\install_user_settings.ps1
+```
+
+## Shortcut options
+
+Avoid these:
+
+- Ctrl+A because most apps use it for Select All.
+- Win+A because Windows uses it for Quick Settings.
+
+Good options:
+
+- `<ctrl>+<alt>+<space>`
+- `<ctrl>+<shift>+<space>`
+- `<ctrl>+<alt>+v`
+
+The default is:
+
+```text
+<ctrl>+<alt>+<space>
+```
