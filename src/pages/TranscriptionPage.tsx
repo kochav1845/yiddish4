@@ -31,6 +31,7 @@ export default function TranscriptionPage() {
   const [outputLanguage, setOutputLanguage] = useState<Language>("yiddish");
   const [result, setResult] = useState<{
     text: string;
+    textIvrit: string | null;
     filename: string;
     outputLang: Language;
   } | null>(null);
@@ -99,7 +100,7 @@ export default function TranscriptionPage() {
     return data.transcription ?? rawText;
   };
 
-  const pollEdgeStatus = async (jobId: string): Promise<string> => {
+  const pollEdgeStatus = async (jobId: string): Promise<{ rawText: string; rawTextIvrit: string | null }> => {
     const maxWait = 900_000;
     const pollInterval = 3_000;
     const started = Date.now();
@@ -120,7 +121,7 @@ export default function TranscriptionPage() {
 
       const data = await res.json();
 
-      if (data.status === "COMPLETED") return data.rawText ?? "";
+      if (data.status === "COMPLETED") return { rawText: data.rawText ?? "", rawTextIvrit: data.rawTextIvrit ?? null };
       if (data.status === "FAILED" || data.status === "CANCELLED") {
         throw new Error(data.error ?? "Transcription job failed");
       }
@@ -209,6 +210,7 @@ export default function TranscriptionPage() {
       let inLang: string = inputLanguage;
       let outLang: string = outputLanguage;
       let rawText = "";
+      let rawTextIvrit: string | null = null;
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), SUBMIT_TIMEOUT_MS);
@@ -241,9 +243,12 @@ export default function TranscriptionPage() {
 
         if (submitData.status === "COMPLETED") {
           rawText = submitData.rawText ?? "";
+          rawTextIvrit = submitData.rawTextIvrit ?? null;
         } else if (submitData.jobId) {
           setStatusMsg("טראַנסקריבירט...");
-          rawText = await pollEdgeStatus(submitData.jobId);
+          const polled = await pollEdgeStatus(submitData.jobId);
+          rawText = polled.rawText;
+          rawTextIvrit = polled.rawTextIvrit;
         } else {
           setError("Unexpected response from server.");
           return;
@@ -281,6 +286,7 @@ export default function TranscriptionPage() {
 
       setResult({
         text: transcriptionText,
+        textIvrit: rawTextIvrit,
         filename: file.name,
         outputLang: outputLanguage,
       });
@@ -464,32 +470,57 @@ export default function TranscriptionPage() {
         )}
 
         {result && (
-          <div className="mb-8 space-y-3">
-            <EditableText
-              contentKey="result_heading"
-              defaultValue="טראַנסקריפּציע"
-              as="h3"
-              className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew"
-              dir="rtl"
-            />
-            <TranscriptionResult
-              text={result.text}
-              filename={result.filename}
-              language={result.outputLang}
-              onAddToDataset={
-                currentFile && !showDatasetPanel
-                  ? () => setShowDatasetPanel(true)
-                  : undefined
-              }
-            />
-            {showDatasetPanel && currentFile && (
-              <AddToDatasetPanel
-                transcription={result.text}
+          <div className="mb-8 space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2" dir="rtl">
+                <EditableText
+                  contentKey="result_heading"
+                  defaultValue="טראַנסקריפּציע"
+                  as="h3"
+                  className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew"
+                  dir="rtl"
+                />
+                <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-hebrew">
+                  yiddishstt
+                </span>
+              </div>
+              <TranscriptionResult
+                text={result.text}
+                filename={result.filename}
                 language={result.outputLang}
-                file={currentFile}
-                onSave={handleSaveToDataset}
-                onDismiss={() => setShowDatasetPanel(false)}
+                onAddToDataset={
+                  currentFile && !showDatasetPanel
+                    ? () => setShowDatasetPanel(true)
+                    : undefined
+                }
               />
+              {showDatasetPanel && currentFile && (
+                <AddToDatasetPanel
+                  transcription={result.text}
+                  language={result.outputLang}
+                  file={currentFile}
+                  onSave={handleSaveToDataset}
+                  onDismiss={() => setShowDatasetPanel(false)}
+                />
+              )}
+            </div>
+
+            {result.textIvrit && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2" dir="rtl">
+                  <h3 className="text-sm font-semibold text-stone-500 uppercase tracking-wider font-hebrew">
+                    טראַנסקריפּציע
+                  </h3>
+                  <span className="text-xs font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full font-hebrew">
+                    ivrit-ai baseline
+                  </span>
+                </div>
+                <TranscriptionResult
+                  text={result.textIvrit}
+                  filename={result.filename}
+                  language={result.outputLang}
+                />
+              </div>
             )}
           </div>
         )}
