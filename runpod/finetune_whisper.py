@@ -55,6 +55,7 @@ class DataCollator:
             for f in features
         ]
         batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+        batch["input_features"] = batch["input_features"].to(torch.float16)
 
         label_features = [{"input_ids": self.processor.tokenizer(f["sentence"], max_length=448, truncation=True).input_ids} for f in features]
         labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
