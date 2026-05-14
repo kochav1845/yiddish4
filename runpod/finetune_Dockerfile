@@ -37,6 +37,7 @@ RUN pip install --no-cache-dir -r finetune_requirements.txt
 COPY runpod/prepare_reyd_finetune.py .
 COPY runpod/finetune_whisper.py .
 COPY runpod/train.sh .
-RUN chmod +x train.sh
+COPY runpod/start_finetune.sh .
+RUN chmod +x train.sh start_finetune.sh
 
-CMD ["bash", "train.sh"]
+CMD ["bash", "start_finetune.sh"]
