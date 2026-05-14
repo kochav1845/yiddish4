@@ -19,6 +19,10 @@ import {
   Pencil,
   Check,
   X,
+  Download,
+  Upload,
+  MonitorDown,
+  Trash2,
 } from "lucide-react";
 import AppHeader from "../components/AppHeader";
 import { supabase, type Profile, type Transcription, type DatasetItem } from "../lib/supabase";
@@ -86,7 +90,7 @@ interface Stats {
   datasetItems: number;
 }
 
-type Tab = "users" | "transcriptions" | "dataset" | "email";
+type Tab = "users" | "transcriptions" | "dataset" | "email" | "downloads";
 
 export default function AdminPage() {
   const { session, user } = useAuth();
@@ -108,6 +112,14 @@ export default function AdminPage() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+
+  // Downloads tab state
+  const [exeFile, setExeFile] = useState<{ name: string; size: number; updated_at: string } | null>(null);
+  const [exeLoading, setExeLoading] = useState(false);
+  const [exeUploading, setExeUploading] = useState(false);
+  const [exeUploadError, setExeUploadError] = useState<string | null>(null);
+  const [exeUploadSuccess, setExeUploadSuccess] = useState(false);
+  const [exeDeleting, setExeDeleting] = useState(false);
 
   // Audio playback (recorded audio)
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -346,6 +358,43 @@ export default function AdminPage() {
     setTimeout(() => setDraftSaved(false), 3000);
   };
 
+  const loadExeInfo = async () => {
+    setExeLoading(true);
+    const { data } = await supabase.storage.from("downloads").list("", { search: "VoicePaste.exe" });
+    const found = data?.find((f) => f.name === "VoicePaste.exe");
+    setExeFile(found ? { name: found.name, size: found.metadata?.size ?? 0, updated_at: found.updated_at ?? "" } : null);
+    setExeLoading(false);
+  };
+
+  useEffect(() => {
+    if (tab === "downloads") loadExeInfo();
+  }, [tab]);
+
+  const handleExeUpload = async (file: File) => {
+    setExeUploading(true);
+    setExeUploadError(null);
+    setExeUploadSuccess(false);
+    const { error } = await supabase.storage
+      .from("downloads")
+      .upload("VoicePaste.exe", file, { upsert: true, contentType: "application/octet-stream" });
+    setExeUploading(false);
+    if (error) {
+      setExeUploadError(error.message);
+    } else {
+      setExeUploadSuccess(true);
+      setTimeout(() => setExeUploadSuccess(false), 4000);
+      loadExeInfo();
+    }
+  };
+
+  const handleExeDelete = async () => {
+    if (!confirm("Delete VoicePaste.exe from storage? Users will no longer be able to download it.")) return;
+    setExeDeleting(true);
+    await supabase.storage.from("downloads").remove(["VoicePaste.exe"]);
+    setExeDeleting(false);
+    setExeFile(null);
+  };
+
   const statCards = [
     { label: "Total Users", value: stats.users, icon: Users, color: "from-blue-500 to-blue-700" },
     { label: "Transcriptions", value: stats.transcriptions, icon: Mic2, color: "from-amber-500 to-amber-700" },
@@ -357,6 +406,7 @@ export default function AdminPage() {
     { id: "transcriptions" as const, label: "Transcriptions", icon: Mic2, count: stats.transcriptions },
     { id: "dataset" as const, label: "Dataset", icon: Database, count: stats.datasetItems },
     { id: "email" as const, label: "Email", icon: Mail, count: null },
+    { id: "downloads" as const, label: "Downloads", icon: MonitorDown, count: null },
   ];
 
   return (
@@ -423,7 +473,7 @@ export default function AdminPage() {
                 </button>
               ))}
             </div>
-            {tab !== "email" && (
+            {tab !== "email" && tab !== "downloads" && (
               <div className="relative sm:ml-auto">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
                 <input
@@ -581,8 +631,128 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* Downloads tab */}
+          {tab === "downloads" && (
+            <div className="p-4 sm:p-6 space-y-5">
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">VoicePaste Desktop App</p>
+                <p className="text-sm text-stone-500 mb-5">
+                  Upload <code className="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">VoicePaste.exe</code> here.
+                  The file will be hosted publicly and a download button will appear on the landing page.
+                </p>
+
+                {/* Current file info */}
+                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 mb-5">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Current Release</p>
+                  {exeLoading ? (
+                    <div className="flex items-center gap-2 text-stone-400 text-sm">
+                      <Loader2 size={14} className="animate-spin" />
+                      Checking storage…
+                    </div>
+                  ) : exeFile ? (
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-stone-700 to-stone-900 flex items-center justify-center shadow-sm">
+                          <Download size={16} className="text-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-stone-800 text-sm">VoicePaste.exe</p>
+                          <p className="text-xs text-stone-400">
+                            {exeFile.size > 0 ? `${(exeFile.size / 1024 / 1024).toFixed(1)} MB` : "Size unknown"}
+                            {exeFile.updated_at ? ` · Updated ${new Date(exeFile.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/downloads/VoicePaste.exe`}
+                          download="VoicePaste.exe"
+                          className="flex items-center gap-1.5 bg-white border border-stone-200 hover:border-stone-300 text-stone-700 font-semibold text-xs px-3.5 py-2 rounded-lg transition-all"
+                        >
+                          <Download size={12} />
+                          Test Download
+                        </a>
+                        <button
+                          onClick={handleExeDelete}
+                          disabled={exeDeleting}
+                          className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-semibold text-xs px-3.5 py-2 rounded-lg transition-all"
+                        >
+                          {exeDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          {exeDeleting ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-stone-400 text-sm">
+                      <AlertCircle size={14} />
+                      No exe uploaded yet. Upload below to enable the download button on the landing page.
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload zone */}
+                <label className="block border-2 border-dashed border-stone-200 hover:border-amber-300 rounded-2xl p-8 text-center cursor-pointer transition-all group">
+                  <input
+                    type="file"
+                    accept=".exe,application/octet-stream"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleExeUpload(file);
+                      e.target.value = "";
+                    }}
+                    disabled={exeUploading}
+                  />
+                  <div className="w-12 h-12 rounded-2xl bg-stone-100 group-hover:bg-amber-50 flex items-center justify-center mx-auto mb-3 transition-colors">
+                    {exeUploading ? (
+                      <Loader2 size={20} className="text-amber-500 animate-spin" />
+                    ) : (
+                      <Upload size={20} className="text-stone-400 group-hover:text-amber-500 transition-colors" />
+                    )}
+                  </div>
+                  <p className="font-semibold text-stone-700 text-sm mb-1">
+                    {exeUploading ? "Uploading…" : "Click to upload VoicePaste.exe"}
+                  </p>
+                  <p className="text-xs text-stone-400">
+                    {exeUploading ? "Please wait" : "The existing file will be replaced. Max 100 MB."}
+                  </p>
+                </label>
+
+                {exeUploadSuccess && (
+                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm font-medium text-emerald-700">
+                    <CheckCircle2 size={15} />
+                    VoicePaste.exe uploaded successfully. The download button is now live on the landing page.
+                  </div>
+                )}
+                {exeUploadError && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm font-medium text-red-700">
+                    <AlertCircle size={15} />
+                    Upload failed: {exeUploadError}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5">
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-3">Hotkey Info</p>
+                <div className="space-y-2">
+                  {[
+                    { label: "Default hotkey", value: "Ctrl + Alt + Space" },
+                    { label: "Press once", value: "Start recording" },
+                    { label: "Press again", value: "Stop, transcribe, and auto-paste" },
+                    { label: "Settings location", value: "%APPDATA%\\VoicePaste\\settings.json" },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex items-center justify-between text-sm gap-4">
+                      <span className="text-stone-500">{label}</span>
+                      <code className="bg-white border border-stone-200 rounded-lg px-2.5 py-1 text-xs font-mono text-stone-700">{value}</code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Data tabs */}
-          {tab !== "email" && (
+          {tab !== "email" && tab !== "downloads" && (
             <>
               {loading ? (
                 <div className="flex items-center justify-center py-20">

@@ -18,7 +18,10 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  MonitorDown,
+  Keyboard,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -124,11 +127,21 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [exeDownloadUrl, setExeDownloadUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    supabase.storage.from("downloads").list("", { search: "VoicePaste.exe" }).then(({ data }) => {
+      if (data?.some((f) => f.name === "VoicePaste.exe")) {
+        const { data: urlData } = supabase.storage.from("downloads").getPublicUrl("VoicePaste.exe");
+        setExeDownloadUrl(urlData.publicUrl);
+      }
+    });
   }, []);
 
   const scrollTo = (id: string) => {
@@ -427,6 +440,65 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           </div>
         </div>
       </section>
+
+      {/* ===== DESKTOP APP DOWNLOAD (shown only when exe is available) ===== */}
+      {exeDownloadUrl && (
+        <section className="py-16 sm:py-20 lg:py-24 bg-white border-t border-stone-100">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="grid md:grid-cols-2 gap-10 lg:gap-16 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 mb-5">
+                  <MonitorDown size={13} className="text-amber-600" />
+                  <span className="text-amber-700 text-xs font-semibold">Windows Desktop App</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-stone-900 mb-4">
+                  Transcribe Yiddish with a Keyboard Shortcut
+                </h2>
+                <p className="text-stone-500 text-base sm:text-lg leading-relaxed mb-6">
+                  Download <strong>VoicePaste</strong> — a lightweight Windows desktop app that lets you record
+                  Yiddish speech and instantly paste the transcription into any application using a single keyboard shortcut.
+                </p>
+                <a
+                  href={exeDownloadUrl}
+                  download="VoicePaste.exe"
+                  className="group inline-flex items-center gap-2.5 bg-gradient-to-r from-stone-800 to-stone-900 hover:from-stone-900 hover:to-black text-white font-semibold px-7 py-3.5 rounded-xl transition-all shadow-lg shadow-stone-900/20 hover:shadow-xl hover:shadow-stone-900/30 text-sm sm:text-base"
+                >
+                  <Download size={16} className="group-hover:translate-y-0.5 transition-transform" />
+                  Download VoicePaste.exe
+                </a>
+                <p className="text-xs text-stone-400 mt-3">Windows 10 / 11 &middot; Free &middot; No installation required</p>
+              </div>
+
+              <div className="bg-stone-900 rounded-2xl p-6 sm:p-8 shadow-xl">
+                <p className="text-white/40 text-xs font-semibold uppercase tracking-wider mb-5 flex items-center gap-2">
+                  <Keyboard size={12} />
+                  How it works
+                </p>
+                <div className="space-y-4">
+                  {[
+                    { key: "Ctrl + Alt + Space", desc: "Press once to start recording Yiddish audio" },
+                    { key: "Ctrl + Alt + Space", desc: "Press again to stop — AI transcribes and pastes the text" },
+                  ].map(({ key, desc }, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <kbd className="inline-flex items-center gap-1 bg-white/10 border border-white/20 rounded-lg px-2.5 py-1.5 text-white text-[11px] font-mono whitespace-nowrap shadow-sm">
+                          {key}
+                        </kbd>
+                      </div>
+                      <p className="text-white/60 text-sm leading-relaxed">{desc}</p>
+                    </div>
+                  ))}
+                  <div className="border-t border-white/10 pt-4 mt-2">
+                    <p className="text-white/40 text-xs">
+                      Connects to your Yiddish Labs account. Hotkey is fully customizable.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== USE CASES ===== */}
       <section className="py-16 sm:py-20 lg:py-24 bg-stone-50">
