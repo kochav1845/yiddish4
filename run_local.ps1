@@ -31,7 +31,7 @@ if (-not (Test-Path $Venv)) {
     Write-Host "Creating virtual environment..." -ForegroundColor Yellow
     python -m venv $Venv
     & "$Venv\Scripts\pip.exe" install --upgrade pip --quiet
-    & "$Venv\Scripts\pip.exe" install -r "$PSScriptRoot\requirements_(1).txt" --quiet
+    & "$Venv\Scripts\pip.exe" install flask requests gunicorn --quiet
 }
 
 Write-Host ""
